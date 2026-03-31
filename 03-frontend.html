@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>前端应用 - Agent Platform 文档</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="sidebar-logo" href="index.html">
+        <div class="logo-icon">🤖</div>
+        <div>
+          <div>Agent Platform</div>
+          <div class="sidebar-subtitle">Motovis 智能体平台</div>
+        </div>
+      </a>
+      <span class="sidebar-version">v2.4.0</span>
+    </div>
+    <ul class="sidebar-nav" id="sidebar-nav"></ul>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-mobile-btn" id="sidebar-toggle">☰</button>
+      <div class="breadcrumb">
+        <a href="index.html">首页</a>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">前端应用</span>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <article class="article">
+        <h1>🖥️ 前端应用</h1>
+        <p class="lead">
+          前端基于 Next.js 14 App Router 构建，采用 React Server Components 与 Client Components
+          混合架构，提供实时流式对话、多 Agent 切换、多模态输入等核心功能。
+        </p>
+
+        <h2 id="structure">应用结构</h2>
+
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">目录树</span>
+          <pre><code>frontend/agent-chat-ui/src/
+├── app/                          # Next.js App Router
+│   ├── layout.tsx                # 全局布局（Providers 注入）
+│   ├── page.tsx                  # 主页面（认证守卫）
+│   ├── login/                    # 登录页
+│   └── api/                      # API Routes（服务端代理）
+│       ├── auth/                 # 登录/登出/Session
+│       ├── admin/                # 用户管理
+│       ├── ollama/               # Ollama 模型列表
+│       ├── rag/                  # RAG 服务代理
+│       ├── training/             # 训练任务
+│       ├── gateway-stats/        # 网关统计
+│       ├── resource-monitor/     # 资源监控
+│       └── tags/                 # 版本标签
+├── components/
+│   ├── agent-platform/           # 主应用组件
+│   │   ├── index.tsx             # 根组件（视图路由）
+│   │   ├── Sidebar.tsx           # 左侧导航栏
+│   │   ├── Header.tsx            # 顶部栏
+│   │   ├── MarketplaceView.tsx   # Agent 市场
+│   │   ├── RuntimeView.tsx       # Agent 运行时
+│   │   ├── AdminView.tsx         # 管理后台
+│   │   └── tabs/                 # 运行时各 Tab 面板
+│   ├── thread/                   # 对话线程组件
+│   │   ├── index.tsx             # 主对话界面
+│   │   ├── messages/             # 消息气泡
+│   │   ├── agent-inbox/          # 人在回路中断处理
+│   │   └── MultimodalPreview.tsx # 多模态预览
+│   └── ui/                       # shadcn/ui 基础组件
+├── providers/
+│   ├── Stream.tsx                # LangGraph 流式通信
+│   ├── AuthProvider.tsx          # 认证状态
+│   ├── Thread.tsx                # 对话线程管理
+│   └── QueryProvider.tsx         # TanStack Query
+├── config/
+│   ├── agents.ts                 # Agent 配置映射
+│   ├── gateway-routes.ts         # API 网关路由
+│   └── theme.ts                  # 主题配置
+└── lib/
+    ├── motovis-safety-dialog.ts  # Dialog-Thread 映射
+    ├── multimodal-utils.ts       # 多模态工具
+    ├── auth/                     # 认证工具
+    └── rag/                      # RAG 客户端</code></pre>
+        </div>
+
+        <h2 id="components">组件架构</h2>
+
+        <h3>主应用入口 — <code>agent-platform/index.tsx</code></h3>
+        <p>
+          根组件负责视图路由（<code>marketplace | runtime | monitoring | admin</code>），
+          管理当前选中的 Agent、选中的视图 Tab，以及移动端侧边栏的开关状态。
+        </p>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">typescript</span>
+          <pre><code class="language-typescript">// 视图切换模型
+type View = "marketplace" | "runtime" | "monitoring" | "admin";
+
+// Marketplace → 选择 Agent → Runtime（含 Chat/Prompt/RAG 等 Tab）
+const [currentView, setCurrentView] = useState&lt;View&gt;("marketplace");
+const [currentAgent, setCurrentAgent] = useState&lt;string | null&gt;(null);</code></pre>
+        </div>
+
+        <h3>侧边栏 — <code>Sidebar.tsx</code></h3>
+        <p>
+          根据当前 Agent 类型动态展示不同的菜单项。商用车主动安全 QA 仅显示"对话交互"和"访问 RAG"，
+          后装算法迭代 Agent 则展示完整的 Prompt/Models/Skills/Memory/Audit 等菜单。
+        </p>
+
+        <h3>Marketplace — <code>MarketplaceView.tsx</code></h3>
+        <p>
+          展示所有可用的 Agent 卡片（来自 <code>config/agents.ts</code> 中的 <code>AGENT_CONFIGS</code>），
+          用户点击"进入运行时"按钮后，切换到 Runtime 视图并将选中的 Agent 配置注入 Stream Provider。
+        </p>
+
+        <h3>对话界面 — <code>thread/index.tsx</code></h3>
+        <p>核心对话组件，负责：</p>
+        <ul>
+          <li>渲染消息历史（AI 回复 Markdown 渲染 + 代码高亮）</li>
+          <li>输入框（文字 + 多模态文件上传）</li>
+          <li>人在回路中断 UI（<code>agent-inbox/</code> 子组件）</li>
+          <li>流式消息动画</li>
+        </ul>
+
+        <h2 id="state">状态管理架构</h2>
+
+        <h3>Stream Provider — 流式通信核心</h3>
+        <p>
+          <code>providers/Stream.tsx</code> 是整个应用最核心的状态管理层，封装了
+          <code>@langchain/langgraph-sdk/react</code> 的 <code>useStream</code> hook。
+        </p>
+
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">typescript</span>
+          <pre><code class="language-typescript">// Stream 状态类型定义
+type StateType = {
+  messages: Message[];
+  ui?: UIMessage[];
+};
+
+// 支持的中断类型（人在回路）
+type InterruptType = HumanInterruptValue[] | HumanInterruptValue;
+
+// HumanInterrupt 结构（与后端 task_proc 子图一致）
+interface HumanInterruptValue {
+  action_request?: { action: string; args?: Record&lt;string, unknown&gt; };
+  config?: {
+    allow_accept?: boolean;
+    allow_ignore?: boolean;
+    allow_respond?: boolean;
+    allow_edit?: boolean;
+  };
+  description?: string;
+}</code></pre>
+        </div>
+
+        <p>Stream Provider 的关键逻辑：</p>
+        <ul>
+          <li><strong>URL 规范化</strong>：自动补全 <code>http://</code> 前缀，将 <code>0.0.0.0</code> 替换为 <code>localhost</code></li>
+          <li><strong>configurable 注入</strong>：商用车 QA Agent 自动注入 <code>motovis_dialog_id</code> 到请求参数</li>
+          <li><strong>thread 管理</strong>：通过 URL query 参数（nuqs）持久化 thread_id，支持对话历史恢复</li>
+          <li><strong>context 传递</strong>：<code>knowledge_memory</code> 开关状态随每轮消息传入后端</li>
+        </ul>
+
+        <h3>Auth Provider — 认证状态</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">typescript</span>
+          <pre><code class="language-typescript">interface AuthContextType {
+  user: User | null;
+  userConfig: UserConfig | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  login: (username: string, password: string, rememberMe: boolean) => Promise&lt;boolean&gt;;
+  logout: () => Promise&lt;void&gt;;
+}</code></pre>
+        </div>
+        <p>
+          <code>checkAuth()</code> 在组件挂载时调用 <code>GET /api/auth/session</code> 验证 cookie，
+          实现页面刷新后的自动登录恢复。
+        </p>
+
+        <h3>Dialog-Thread 状态持久化</h3>
+        <p>
+          商用车 QA Agent 中，每个 LangGraph thread 需要绑定一个 MotovisRAG Dialog ID。
+          <code>lib/motovis-safety-dialog.ts</code> 使用 localStorage 维护
+          <code>threadId → dialogId</code> 的映射表，防止多会话时 Dialog 错乱。
+        </p>
+
+        <h2 id="api">API 集成</h2>
+
+        <h3>API Route 代理层</h3>
+        <p>
+          所有后端调用均通过 Next.js API Routes 代理，避免前端直接暴露后端地址和 token：
+        </p>
+
+        <table>
+          <thead><tr><th>API 路径</th><th>代理到</th><th>功能</th></tr></thead>
+          <tbody>
+            <tr><td><code>/api/auth/*</code></td><td>MySQL（直连）</td><td>登录/登出/Session</td></tr>
+            <tr><td><code>/api/langgraph/*</code></td><td>LangGraph :2024</td><td>Agent 对话/流</td></tr>
+            <tr><td><code>/api/rag/*</code></td><td>RAG :9380</td><td>知识库操作</td></tr>
+            <tr><td><code>/api/ollama/*</code></td><td>Ollama :11434</td><td>模型列表</td></tr>
+            <tr><td><code>/api/training/*</code></td><td>Backend :2024</td><td>训练任务管理</td></tr>
+            <tr><td><code>/api/admin/*</code></td><td>MySQL（直连）</td><td>用户管理</td></tr>
+          </tbody>
+        </table>
+
+        <h3>LangGraph SDK 集成</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">typescript</span>
+          <pre><code class="language-typescript">// lib/client.ts
+import { Client } from "@langchain/langgraph-sdk";
+
+export const client = new Client({
+  apiUrl: process.env.NEXT_PUBLIC_AGENT_API_URL || "http://localhost:2024",
+});
+
+// providers/Stream.tsx 中发送消息
+const { submit } = useTypedStream({
+  apiUrl: agentConfig.apiUrl,
+  assistantId: agentConfig.assistantId,
+  streamMode: ["values", "messages"],
+  onError: (error) => toast.error(error.message),
+});</code></pre>
+        </div>
+
+        <h2 id="multimodal">多模态支持</h2>
+        <p>
+          <code>hooks/use-file-upload.tsx</code> 处理文件上传，
+          <code>lib/multimodal-utils.ts</code> 负责格式转换：
+        </p>
+        <ul>
+          <li><strong>图片</strong>：转为 <code>data:image/jpeg;base64,...</code>，封装为 <code>image_url</code> 块</li>
+          <li><strong>PDF</strong>：直连 Ollama 模式下提示用户补充文字说明；RAG 模式下通过知识库解析</li>
+          <li><strong>预览</strong>：<code>MultimodalPreview.tsx</code> 在消息气泡中展示图片缩略图</li>
+        </ul>
+
+        <h2 id="auth">认证系统</h2>
+
+        <h3>登录流程</h3>
+        <ol class="step-list">
+          <li><div>用户提交登录表单 → <code>POST /api/auth/login</code></div></li>
+          <li><div>API Route 查询 MySQL 用户表，验证 bcrypt 密码</div></li>
+          <li><div>验证通过 → 创建 HttpOnly Session Cookie</div></li>
+          <li><div>前端 AuthProvider 更新 <code>user</code> 状态，路由跳转到主页</div></li>
+        </ol>
+
+        <h3>路由守卫</h3>
+        <p>
+          <code>app/page.tsx</code> 使用 <code>useAuth()</code> hook 检查认证状态，
+          未认证时通过 <code>useRouter().push('/login')</code> 重定向到登录页。
+          AuthProvider 的 <code>isLoading</code> 状态防止闪烁（骨架屏过渡）。
+        </p>
+
+        <h2 id="devflow">开发流程</h2>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 开发环境启动
+cd frontend/agent-chat-ui
+npm run dev        # 启动 Next.js 开发服务器（热重载）
+
+# 代码检查
+npm run lint       # ESLint 检查
+npm run format     # Prettier 格式化
+
+# 生产构建
+npm run build      # 生成 .next/ 构建产物
+npm run start      # 启动生产服务器</code></pre>
+        </div>
+
+        <div class="page-nav">
+          <a class="page-nav-item" href="02-architecture.html">
+            <div class="page-nav-label">← 上一篇</div>
+            <div class="page-nav-title">系统架构</div>
+          </a>
+          <a class="page-nav-item next" href="04-backend.html">
+            <div class="page-nav-label">下一篇 →</div>
+            <div class="page-nav-title">后端服务</div>
+          </a>
+        </div>
+      </article>
+
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title">本页目录</div>
+          <ul class="toc-list" id="toc-list"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <span>© 2024-2026 Motovis Intelligence. Agent Platform v2.4.0</span>
+      <span>基于 LangGraph · RAGFlow · Next.js 构建</span>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="assets/nav.js"></script>
+</body>
+</html>

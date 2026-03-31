@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>系统架构 - Agent Platform 文档</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="sidebar-logo" href="index.html">
+        <div class="logo-icon">🤖</div>
+        <div>
+          <div>Agent Platform</div>
+          <div class="sidebar-subtitle">Motovis 智能体平台</div>
+        </div>
+      </a>
+      <span class="sidebar-version">v2.4.0</span>
+    </div>
+    <ul class="sidebar-nav" id="sidebar-nav"></ul>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-mobile-btn" id="sidebar-toggle">☰</button>
+      <div class="breadcrumb">
+        <a href="index.html">首页</a>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">系统架构</span>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <article class="article">
+        <h1>🏗️ 系统架构</h1>
+        <p class="lead">
+          Agent Platform 采用微服务架构，由前端、后端 Agent、RAG 服务和基础设施四层组成，
+          通过 Docker Compose 统一编排，Nginx 反向代理统一对外入口。
+        </p>
+
+        <h2 id="overview">整体架构设计</h2>
+
+        <div class="arch-visual">
+          <!-- Row 1: Browser -->
+          <div class="av-row">
+            <div class="av-node av-browser">
+              <div class="av-node-icon">🌐</div>
+              <div class="av-node-title">用户浏览器</div>
+              <div class="av-node-sub">HTTP / SSE / WebSocket</div>
+            </div>
+          </div>
+          <div class="av-arrow">↓</div>
+
+          <!-- Row 2: Nginx -->
+          <div class="av-row">
+            <div class="av-node av-nginx">
+              <div class="av-node-icon">🔀</div>
+              <div class="av-node-title">Nginx 反向代理</div>
+              <div class="av-node-badge">:80 / :443</div>
+              <div class="av-node-sub">统一入口 → proxy_pass :3000</div>
+            </div>
+          </div>
+          <div class="av-arrow">↓</div>
+
+          <!-- Row 3: Frontend -->
+          <div class="av-row">
+            <div class="av-node av-frontend av-wide">
+              <div class="av-node-icon">⚛️</div>
+              <div class="av-node-title">Next.js 前端 <span class="av-port">:3000</span></div>
+              <div class="av-node-chips">
+                <span class="av-chip">React UI 层</span>
+                <span class="av-chip">API Routes</span>
+                <span class="av-chip">Stream Provider (SSE)</span>
+                <span class="av-chip">Auth Provider</span>
+                <span class="av-chip">Marketplace / Runtime</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 4: Three services -->
+          <div class="av-arrow av-split">↙&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↘</div>
+          <div class="av-row av-row-3">
+            <div class="av-node av-backend">
+              <div class="av-node-icon">⚙️</div>
+              <div class="av-node-title">LangGraph Backend</div>
+              <div class="av-node-badge">:2024</div>
+              <div class="av-node-sub">houzhuang_agent<br/>safety_qa_agent</div>
+            </div>
+            <div class="av-node av-db">
+              <div class="av-node-icon">🗄️</div>
+              <div class="av-node-title">MySQL</div>
+              <div class="av-node-badge">:3307</div>
+              <div class="av-node-sub">用户 / 会话管理</div>
+            </div>
+            <div class="av-node av-rag">
+              <div class="av-node-icon">📚</div>
+              <div class="av-node-title">RAG 服务</div>
+              <div class="av-node-badge">:9380</div>
+              <div class="av-node-sub">ES + MinIO<br/>向量检索</div>
+            </div>
+          </div>
+          <div class="av-arrow">↓ (Backend → LLM)</div>
+
+          <!-- Row 5: Infra -->
+          <div class="av-row av-row-4">
+            <div class="av-node av-ollama">
+              <div class="av-node-icon">🤖</div>
+              <div class="av-node-title">Ollama</div>
+              <div class="av-node-badge">:11434</div>
+              <div class="av-node-sub">qwen2.5:7b</div>
+            </div>
+            <div class="av-node av-infra">
+              <div class="av-node-icon">🔴</div>
+              <div class="av-node-title">Redis</div>
+              <div class="av-node-badge">:6379</div>
+              <div class="av-node-sub">缓存 / 队列</div>
+            </div>
+            <div class="av-node av-infra">
+              <div class="av-node-icon">🔍</div>
+              <div class="av-node-title">Elasticsearch</div>
+              <div class="av-node-badge">:9200</div>
+              <div class="av-node-sub">向量 / 全文</div>
+            </div>
+            <div class="av-node av-infra">
+              <div class="av-node-icon">📦</div>
+              <div class="av-node-title">MinIO</div>
+              <div class="av-node-badge">:9000</div>
+              <div class="av-node-sub">对象存储</div>
+            </div>
+          </div>
+        </div>
+
+        <h2 id="services">服务组成</h2>
+
+        <table>
+          <thead>
+            <tr>
+              <th>服务名</th>
+              <th>Container</th>
+              <th>端口</th>
+              <th>技术栈</th>
+              <th>职责</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>frontend</strong></td>
+              <td>—</td>
+              <td><span class="port-badge">3000</span></td>
+              <td>Next.js 14 + React 18</td>
+              <td>前端 UI、API 代理、认证</td>
+            </tr>
+            <tr>
+              <td><strong>backend</strong></td>
+              <td>agent-platform-backend</td>
+              <td><span class="port-badge">2024</span></td>
+              <td>Python + LangGraph Server</td>
+              <td>AI Agent 工作流引擎</td>
+            </tr>
+            <tr>
+              <td><strong>rag</strong></td>
+              <td>agent-platform-rag</td>
+              <td><span class="port-badge">9380</span></td>
+              <td>Python + Quart + ES</td>
+              <td>知识库 RAG 服务</td>
+            </tr>
+            <tr>
+              <td><strong>mysql</strong></td>
+              <td>agent-platform-mysql</td>
+              <td><span class="port-badge">3307</span></td>
+              <td>MySQL 8.0</td>
+              <td>用户数据、对话历史</td>
+            </tr>
+            <tr>
+              <td><strong>redis</strong></td>
+              <td>agent-platform-redis</td>
+              <td><span class="port-badge">6379</span></td>
+              <td>Redis 7</td>
+              <td>缓存、任务队列</td>
+            </tr>
+            <tr>
+              <td><strong>minio</strong></td>
+              <td>agent-platform-minio</td>
+              <td><span class="port-badge">9000</span></td>
+              <td>MinIO</td>
+              <td>文档/文件对象存储</td>
+            </tr>
+            <tr>
+              <td><strong>elasticsearch</strong></td>
+              <td>agent-platform-elasticsearch</td>
+              <td><span class="port-badge">9200</span></td>
+              <td>ES 8.11</td>
+              <td>向量检索、全文搜索</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="dataflow">数据流架构</h2>
+
+        <h3>对话请求数据流</h3>
+        <div class="flow-diagram">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#7aa2f7"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">① 用户发送消息</div><div class="flow-content-detail">前端 useStream Hook 触发请求</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#7aa2f7"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">② Next.js API Route 代理</div><div class="flow-content-detail">POST /api/langgraph/threads/{'{id}'}/runs/stream → 转发到 LangGraph Server</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#7aa2f7"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">③ LangGraph Backend :2024</div><div class="flow-content-detail">graph.invoke / graph.stream — 执行 Agent 状态图节点</div></div>
+            </div>
+          </div>
+          <div class="flow-branch">
+            <div class="flow-branch-item"><strong>🔵 直连模式</strong>Ollama LLM :11434 → 返回 AI 回复</div>
+            <div class="flow-branch-item"><strong>🟢 RAG 模式</strong>RAG Service :9380 → ES 向量检索 → LLM 生成含引用答案</div>
+          </div>
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#10b981"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">④ SSE 流式响应回传前端</div><div class="flow-content-detail">event: messages/partial → React useStream 实时渲染消息</div></div>
+            </div>
+          </div>
+        </div>
+
+        <h3>人在回路（Human-in-the-Loop）数据流</h3>
+        <div class="flow-diagram">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#f59e0b"></div><div class="flow-line" style="background:linear-gradient(180deg,#f59e0b,#2d2d44)"></div></div>
+              <div class="flow-content"><div class="flow-content-title">① node_task_proc_assistant</div><div class="flow-content-detail">LLM 解析任务类型 / 名称 / 参数，路由到 node_task_proc</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#f59e0b"></div><div class="flow-line" style="background:linear-gradient(180deg,#f59e0b,#2d2d44)"></div></div>
+              <div class="flow-content"><div class="flow-content-title">② 下载数据步骤 → <span style="color:#ef4444;font-weight:700">interrupt()</span></div><div class="flow-content-detail">图执行暂停，前端收到 HumanInterrupt 事件，显示"确认继续"按钮</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#f59e0b"></div><div class="flow-line" style="background:linear-gradient(180deg,#f59e0b,#2d2d44)"></div></div>
+              <div class="flow-content"><div class="flow-content-title">③ 用户点击确认</div><div class="flow-content-detail">POST .../runs/stream { command: { resume: ... } } → 图从中断点恢复</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#10b981"></div></div>
+              <div class="flow-content"><div class="flow-content-title">④ 执行训练 / 预测 → 返回结果</div><div class="flow-content-detail">task_proc 子图继续执行，完成后回传训练指标</div></div>
+            </div>
+          </div>
+        </div>
+
+        <h2 id="deploy">部署架构</h2>
+
+        <h3>Docker Compose 编排关系</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">yaml</span>
+          <pre><code class="language-yaml">services:
+  mysql:      # 基础数据库，最先启动
+  redis:      # 缓存服务
+  minio:      # 对象存储
+  elasticsearch:  # 向量搜索引擎
+  rag:        # depends_on: mysql, redis, minio, elasticsearch
+  backend:    # depends_on: rag
+              # environment: MOTOVIS_RAG_URL=http://rag:9380</code></pre>
+        </div>
+
+        <div class="info-box info">
+          <div class="ib-icon">ℹ️</div>
+          <div class="ib-content">
+            <p class="ib-title">服务间通信</p>
+            <p>Docker 内部网络中，Backend 通过 <code>http://rag:9380</code> 访问 RAG 服务
+            （容器名作为 hostname），宿主机访问使用 <code>http://localhost:9380</code>。</p>
+          </div>
+        </div>
+
+        <h3>网络拓扑</h3>
+        <table>
+          <thead><tr><th>访问方向</th><th>地址</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>用户 → 平台</td><td><code>http://your-domain.com</code></td><td>Nginx 统一入口</td></tr>
+            <tr><td>Nginx → 前端</td><td><code>http://127.0.0.1:3000</code></td><td>Next.js</td></tr>
+            <tr><td>前端 → Backend</td><td><code>/api/langgraph/*</code> 代理</td><td>Next.js API Route</td></tr>
+            <tr><td>前端 → RAG</td><td><code>/api/rag/*</code> 代理</td><td>Next.js API Route</td></tr>
+            <tr><td>Backend → RAG</td><td><code>http://rag:9380</code></td><td>Docker 内部</td></tr>
+            <tr><td>Backend → LLM</td><td><code>http://host.docker.internal:11434</code></td><td>宿主机 Ollama</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="security">安全架构</h2>
+
+        <h3>认证授权</h3>
+        <ul>
+          <li><strong>Session 认证</strong>：Next.js API Route 生成 HttpOnly cookie，客户端无法直接读取 token</li>
+          <li><strong>角色控制</strong>：<code>isAdmin</code> 字段区分管理员与普通用户，管理员可访问全局监控和权限管理</li>
+          <li><strong>RAG API Token</strong>：RAG 服务使用 Bearer Token 认证，前端通过 Next.js API Route 代理，隐藏 token</li>
+        </ul>
+
+        <h3>数据安全</h3>
+        <ul>
+          <li>所有密码字段经过 bcrypt 哈希存储</li>
+          <li>Elasticsearch 启用 X-Pack 安全认证（<code>xpack.security.enabled=true</code>）</li>
+          <li>生产环境建议启用 Nginx HTTPS（Let's Encrypt）</li>
+          <li>Docker 服务间通信默认不暴露到宿主机网络</li>
+        </ul>
+
+        <h3>SSE 连接安全</h3>
+        <p>
+          Nginx 配置 <code>proxy_read_timeout 86400</code>，保持 SSE 长连接不超时；
+          <code>proxy_set_header Upgrade $http_upgrade</code> 支持 WebSocket 升级。
+        </p>
+
+        <div class="page-nav">
+          <a class="page-nav-item" href="01-quickstart.html">
+            <div class="page-nav-label">← 上一篇</div>
+            <div class="page-nav-title">快速开始</div>
+          </a>
+          <a class="page-nav-item next" href="03-frontend.html">
+            <div class="page-nav-label">下一篇 →</div>
+            <div class="page-nav-title">前端应用</div>
+          </a>
+        </div>
+      </article>
+
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title">本页目录</div>
+          <ul class="toc-list" id="toc-list"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <span>© 2024-2026 Motovis Intelligence. Agent Platform v2.4.0</span>
+      <span>基于 LangGraph · RAGFlow · Next.js 构建</span>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+<script src="assets/nav.js"></script>
+</body>
+</html>

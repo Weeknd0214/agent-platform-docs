@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>算法处理系统 - Agent Platform 文档</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="sidebar-logo" href="index.html">
+        <div class="logo-icon">🤖</div>
+        <div>
+          <div>Agent Platform</div>
+          <div class="sidebar-subtitle">Motovis 智能体平台</div>
+        </div>
+      </a>
+      <span class="sidebar-version">v2.4.0</span>
+    </div>
+    <ul class="sidebar-nav" id="sidebar-nav"></ul>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-mobile-btn" id="sidebar-toggle">☰</button>
+      <div class="breadcrumb">
+        <a href="index.html">首页</a>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">算法处理系统</span>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <article class="article">
+        <h1>🤖 算法处理系统</h1>
+        <p class="lead">
+          算法处理系统是 Agent Platform 的核心业务价值所在，
+          以 FCOS（Fully Convolutional One-Stage Object Detection）为基础，
+          面向后装市场的 DMS/BSD/HOD 等多个安全驾驶场景提供自动化训练、评估和模型转换能力。
+        </p>
+
+        <h2 id="fcos">FCOS 算法实现</h2>
+
+        <h3>算法概述</h3>
+        <p>
+          FCOS 是一种 Anchor-Free 的单阶段目标检测算法，相比传统 Anchor-Based 方法，
+          无需预设锚框，通过逐像素预测目标的中心点、边界框偏移和置信度来实现检测。
+        </p>
+
+        <h3>网络架构</h3>
+        <div class="flow-diagram">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#9f7aea"></div><div class="flow-line" style="background:linear-gradient(180deg,#9f7aea,#2d2d44)"></div></div>
+              <div class="flow-content"><div class="flow-content-title">输入图像</div><div class="flow-content-detail">H xd7 W xd7 3 RGB 张量</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#9f7aea"></div><div class="flow-line" style="background:linear-gradient(180deg,#9f7aea,#2d2d44)"></div></div>
+              <div class="flow-content"><div class="flow-content-title">Backbone（RepVGGDet）</div><div class="flow-content-detail">多阶段特征提取 &mdash; 训练时多分支并行 / 部署时等效单分支（推理加速）</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#9f7aea"></div><div class="flow-line" style="background:linear-gradient(180deg,#9f7aea,#2d2d44)"></div></div>
+              <div class="flow-content"><div class="flow-content-title">FPN（Feature Pyramid Network）</div><div class="flow-content-detail">P3 / P4 / P5 多尺度特征融合：小目标用浅层，大目标用深层</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#9f7aea"></div><div class="flow-line" style="background:linear-gradient(180deg,#9f7aea,#2d2d44)"></div></div>
+              <div class="flow-content"><div class="flow-content-title">FCOSHead</div>
+                <div class="flow-branch" style="margin:8px 0 0 0;padding:0;">
+                  <div class="flow-branch-item"><strong>分类分支</strong>目标类别预测（Focal Loss）</div>
+                  <div class="flow-branch-item"><strong>回归分支</strong>l/t/r/b 边界框偏移（IoU Loss）</div>
+                  <div class="flow-branch-item"><strong>中心度分支</strong>Center-ness 权重（BCE Loss）</div>
+                </div>
+              </div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#10b981"></div></div>
+              <div class="flow-content"><div class="flow-content-title">后处理（NMS）</div><div class="flow-content-detail">非极大値抑制 → 输出最终检测框</div></div>
+            </div>
+          </div>
+        </div>
+
+        <h3>RepVGG 结构重参数化</h3>
+        <p>
+          Backbone 采用 RepVGG 设计，在训练阶段使用多分支结构（3×3 + 1×1 + Identity），
+          在部署阶段通过结构重参数化（Structural Re-parameterization）将多分支等效合并为
+          单个 3×3 卷积，实现推理速度提升而不损失精度。
+        </p>
+
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">架构对比</span>
+          <pre><code># 训练时（多分支）：
+output = conv3x3(x) + conv1x1(x) + x    # 三路并行
+
+# 推理时（单分支，等效合并后）：
+output = conv3x3_merged(x)               # 推理快 ~1.5x</code></pre>
+        </div>
+
+        <h2 id="scenes">多场景算法适配</h2>
+
+        <h3>DMS（驾驶员监控系统）</h3>
+        <p>DMS 模块包含最丰富的检测功能，支持以下子任务：</p>
+
+        <table>
+          <thead><tr><th>子任务</th><th>目录</th><th>检测目标</th></tr></thead>
+          <tbody>
+            <tr><td>人眼检测</td><td><code>dms_eye_det</code></td><td>眼睛开闭状态，疲劳驾驶预警</td></tr>
+            <tr><td>人头检测</td><td><code>dms_head_det</code></td><td>头部姿态，低头/转头行为</td></tr>
+            <tr><td>人脸检测</td><td><code>dms_face_det</code></td><td>人脸定位，活体检测</td></tr>
+            <tr><td>手机检测</td><td><code>dms_phone_det</code></td><td>驾驶时使用手机</td></tr>
+            <tr><td>吸烟检测</td><td><code>dms_cigarette_det</code></td><td>驾驶时吸烟行为</td></tr>
+            <tr><td>安全带检测</td><td><code>dms_belt_det</code></td><td>安全带佩戴状态</td></tr>
+            <tr><td>头盔检测</td><td><code>dms_helmet_det</code></td><td>头盔佩戴（商用车）</td></tr>
+            <tr><td>乘客检测</td><td><code>dms_passenger_det</code></td><td>驾驶位/副驾乘员检测</td></tr>
+            <tr><td>驾驶姿态</td><td><code>dms_posture_det</code></td><td>单手驾驶、翘腿等危险姿态</td></tr>
+          </tbody>
+        </table>
+
+        <div class="info-box info">
+          <div class="ib-icon">ℹ️</div>
+          <div class="ib-content">
+            <p class="ib-title">_fudai 变体</p>
+            <p>带 <code>_fudai</code> 后缀的目录（如 <code>dms_eye_det_fudai</code>）
+            是针对"副代"（外挂/违规装置遮挡摄像头场景）的专项适配版本，
+            增强了对遮挡和异常安装角度的鲁棒性。</p>
+          </div>
+        </div>
+
+        <h3>BSD（盲区监测系统）</h3>
+        <p>
+          BSD 模块专注于车辆盲区目标检测，主要检测：
+          摩托车、自行车、行人、小轿车在车辆侧后方盲区的出现。
+          支持不同摄像头安装位置（左盲区/右盲区/后方）的参数适配。
+        </p>
+
+        <h3>HOD（车内危险目标检测）</h3>
+        <p>HOD（Hazardous Object Detection）包含 11 个子模块，检测车厢/驾驶舱内的危险物品：</p>
+        <div>
+          <span class="tag tag-orange">刀具</span>
+          <span class="tag tag-orange">枪支</span>
+          <span class="tag tag-orange">危险品包装</span>
+          <span class="tag tag-orange">电子烟</span>
+          <span class="tag tag-orange">液体容器</span>
+          <span class="tag tag-gray">以及其他合规检测项目</span>
+        </div>
+
+        <h3>其他场景</h3>
+        <table>
+          <thead><tr><th>场景</th><th>目录</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>230 大学场景</td><td><code>230_university</code></td><td>大学校园场景特化，包含模型转换版本</td></tr>
+            <tr><td>241 场景</td><td><code>241</code></td><td>特定硬件平台（SoC 241）的优化版本</td></tr>
+            <tr><td>216 场景</td><td><code>216</code></td><td>特定硬件平台（216 芯片）的适配版本</td></tr>
+            <tr><td>ADAS 场景</td><td><code>adas</code></td><td>高级驾驶辅助系统感知</td></tr>
+            <tr><td>人脸场景</td><td><code>face</code></td><td>人脸关键点检测（FaceBoxes + 热力图）</td></tr>
+            <tr><td>货物场景</td><td><code>cargo</code></td><td>货物检测与识别</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="training">训练流程管理</h2>
+
+        <h3>任务处理流程</h3>
+        <p>
+          后装算法迭代 Agent 通过 LangGraph 的 <code>task_proc</code> 子图管理完整的训练流程：
+        </p>
+        <ol class="step-list">
+          <li>
+            <div>
+              <strong>任务解析</strong>：LLM 从用户自然语言中提取任务类型（DMS2.0）、
+              功能（人眼）、任务名称、处理类型（train/eval/model_cvt）
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>数据下载</strong>（可选）：从 HTTP 服务器拉取标注数据集 → 
+              触发 <code>interrupt()</code> 等待用户确认
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>数据标注</strong>（训练任务）：将原始数据转换为 FCOS 训练格式，
+              生成 annotation JSON 文件
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>训练/预测/转换</strong>：调用对应场景目录下的训练脚本，
+              支持 Shell 调用和 Python API 两种方式
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>结果汇报</strong>：训练指标（mAP、Loss 曲线）回传到对话界面
+            </div>
+          </li>
+        </ol>
+
+        <h3>数据预处理管道</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">目录树</span>
+          <pre><code>backend/houzhuang_agent/tools/data_pre_proc/
+├── 数据格式转换（COCO/VOC/自定义 → FCOS 格式）
+├── 数据集分割（train/val/test）
+├── 数据增强配置
+├── 类别映射管理
+└── 标注质量检查</code></pre>
+        </div>
+
+        <h2 id="inference">推理优化技术</h2>
+
+        <h3>模型转换</h3>
+        <p>
+          通过 <code>model_cvt</code>（模型转换）任务，将 PyTorch 训练模型转换为
+          目标芯片的部署格式：
+        </p>
+        <table>
+          <thead><tr><th>目标平台</th><th>转换格式</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>通用平台</td><td>ONNX</td><td>标准中间表示，便于跨平台部署</td></tr>
+            <tr><td>NT98323（DMS2.0）</td><td>厂商专用格式</td><td>星芯通芯片优化格式</td></tr>
+            <tr><td>241/216 平台</td><td>平台特化格式</td><td>量化 + 算子融合优化</td></tr>
+          </tbody>
+        </table>
+
+        <h3>量化优化</h3>
+        <ul>
+          <li><strong>INT8 量化</strong>：减少模型体积 75%，推理速度提升 2-4x</li>
+          <li><strong>算子融合</strong>：Conv + BN + ReLU 等连续算子融合为单算子</li>
+          <li><strong>RepVGG 重参数化</strong>：训练多分支 → 部署单分支（无精度损失）</li>
+        </ul>
+
+        <h2 id="evaluation">模型评估体系</h2>
+        <p>评估模块（<code>eval</code> 任务类型）提供完整的检测性能评估：</p>
+
+        <table>
+          <thead><tr><th>评估指标</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><strong>mAP</strong></td><td>各类别平均精度均值（IoU=0.5）</td></tr>
+            <tr><td><strong>mAP@[.5:.95]</strong></td><td>多 IoU 阈值下的 mAP，更严格的评估</td></tr>
+            <tr><td><strong>FPS</strong></td><td>目标硬件上的推理帧率</td></tr>
+            <tr><td><strong>误报率/漏报率</strong></td><td>针对业务场景的自定义评估维度</td></tr>
+          </tbody>
+        </table>
+
+        <div class="page-nav">
+          <a class="page-nav-item" href="06-rag.html">
+            <div class="page-nav-label">← 上一篇</div>
+            <div class="page-nav-title">RAG 功能模块</div>
+          </a>
+          <a class="page-nav-item next" href="08-deployment.html">
+            <div class="page-nav-label">下一篇 →</div>
+            <div class="page-nav-title">部署与运维</div>
+          </a>
+        </div>
+      </article>
+
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title">本页目录</div>
+          <ul class="toc-list" id="toc-list"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <span>© 2024-2026 Motovis Intelligence. Agent Platform v2.4.0</span>
+      <span>基于 LangGraph · RAGFlow · Next.js 构建</span>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="assets/nav.js"></script>
+</body>
+</html>

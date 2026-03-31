@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>部署与运维 - Agent Platform 文档</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="sidebar-logo" href="index.html">
+        <div class="logo-icon">🤖</div>
+        <div>
+          <div>Agent Platform</div>
+          <div class="sidebar-subtitle">Motovis 智能体平台</div>
+        </div>
+      </a>
+      <span class="sidebar-version">v2.4.0</span>
+    </div>
+    <ul class="sidebar-nav" id="sidebar-nav"></ul>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-mobile-btn" id="sidebar-toggle">☰</button>
+      <div class="breadcrumb">
+        <a href="index.html">首页</a>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">部署与运维</span>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <article class="article">
+        <h1>🐳 部署与运维</h1>
+        <p class="lead">
+          Agent Platform 支持开发模式（直接本地运行）和生产模式（Docker Compose 容器化）两种部署方式，
+          Nginx 反向代理统一对外入口，支持 HTTPS 和域名绑定。
+        </p>
+
+        <h2 id="dev">开发环境部署</h2>
+
+        <h3>一键启动脚本</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># Linux/macOS
+./scripts/start-dev.sh
+
+# Windows (PowerShell)
+.\scripts\start-dev.bat</code></pre>
+        </div>
+
+        <p>脚本自动完成以下操作：</p>
+        <ul>
+          <li>自动检测内网 IP 并写入 <code>.env.local</code></li>
+          <li>检查 <code>langgraph</code>、<code>npm</code> 依赖</li>
+          <li>后台启动 LangGraph Agent 服务（端口 2024）</li>
+          <li>安装前端依赖（如未安装）并启动 Next.js 开发服务器（端口 3000）</li>
+          <li><code>Ctrl+C</code> 优雅停止所有进程</li>
+        </ul>
+
+        <h3>手动分步启动</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 终端 1：启动后端 Agent
+cd backend
+pip install -r requirements.txt
+langgraph dev --host 0.0.0.0 --port 2024
+
+# 终端 2：启动前端
+cd frontend/agent-chat-ui
+npm install
+npm run dev</code></pre>
+        </div>
+
+        <h2 id="docker">容器化部署</h2>
+
+        <h3>Backend Dockerfile</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">dockerfile</span>
+          <pre><code class="language-docker">FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+# 安装系统依赖（pygraphviz 需要 graphviz 开发头文件）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    graphviz libgraphviz-dev pkg-config gcc python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 分批安装依赖（避免 pip 依赖解析深度超限）
+RUN pip install --no-cache-dir \
+    "langgraph-cli[inmem]" langgraph langchain \
+    langchain-core langchain-ollama httpx
+
+# 安装 CV/数据处理依赖
+ENV GRAPHVIZ_DIR=/usr
+RUN pip install --no-cache-dir \
+    pillow numpy opencv-python-headless \
+    tqdm requests rarfile py7zr pyyaml \
+    moviepy lxml typing-extensions \
+ && pip install --no-cache-dir pygraphviz
+
+COPY . /app/
+EXPOSE 2024
+CMD ["langgraph", "dev", "--host", "0.0.0.0", "--port", "2024"]</code></pre>
+        </div>
+
+        <h3>Docker Compose 启动</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 首次启动（构建镜像）
+docker compose up -d --build
+
+# 查看所有服务状态
+docker compose ps
+
+# 查看特定服务日志
+docker compose logs -f backend
+docker compose logs -f rag
+
+# 重启某个服务
+docker compose restart backend
+
+# 停止所有服务
+docker compose down
+
+# 停止并清除数据卷（危险！会删除数据库数据）
+docker compose down -v</code></pre>
+        </div>
+
+        <h3>数据持久化</h3>
+        <table>
+          <thead><tr><th>数据卷</th><th>存储内容</th><th>重要性</th></tr></thead>
+          <tbody>
+            <tr><td><code>mysql_data</code></td><td>用户数据、RAG 元数据</td><td>⚠️ 极重要，勿随意删除</td></tr>
+            <tr><td><code>minio_data</code></td><td>上传的文档文件</td><td>⚠️ 重要</td></tr>
+            <tr><td><code>es_data</code></td><td>向量索引、全文索引</td><td>⚠️ 重要（可重建）</td></tr>
+          </tbody>
+        </table>
+
+        <div class="info-box warning">
+          <div class="ib-icon">⚠️</div>
+          <div class="ib-content">
+            <p class="ib-title">数据备份</p>
+            <p>生产环境请定期备份 MySQL：
+            <code>docker exec agent-platform-mysql mysqldump -uroot -pinfini_rag_flow rag_flow > backup.sql</code></p>
+          </div>
+        </div>
+
+        <h2 id="nginx">Nginx 反向代理</h2>
+
+        <h3>安装配置</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 复制配置文件
+sudo cp deploy/nginx/agent-platform.conf /etc/nginx/sites-available/
+sudo ln -s /etc/nginx/sites-available/agent-platform.conf /etc/nginx/sites-enabled/
+
+# 修改域名
+sudo nano /etc/nginx/sites-available/agent-platform.conf
+# 将 server_name your-domain.com; 改为实际域名或 IP
+
+# 测试并重载配置
+sudo nginx -t
+sudo nginx -s reload</code></pre>
+        </div>
+
+        <h3>核心配置说明</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">nginx</span>
+          <pre><code>server {
+    listen 80;
+    server_name your-domain.com;
+
+    client_max_body_size 50M;  # 支持大文件上传
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;  # Next.js 前端
+        proxy_http_version 1.1;
+        # WebSocket 升级支持
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        # SSE 长连接不超时
+        proxy_read_timeout 86400;
+    }
+}</code></pre>
+        </div>
+
+        <h3>启用 HTTPS（Let's Encrypt）</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 安装 certbot
+sudo apt install certbot python3-certbot-nginx
+
+# 申请证书（自动修改 Nginx 配置）
+sudo certbot --nginx -d your-domain.com
+
+# 自动续期（已由 certbot 添加到 cron）
+sudo certbot renew --dry-run</code></pre>
+        </div>
+
+        <h2 id="env-vars">环境变量配置</h2>
+
+        <h3>后端关键变量</h3>
+        <table>
+          <thead><tr><th>变量名</th><th>默认值</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>OLLAMA_BASE_URL</code></td><td><code>http://localhost:11434</code></td><td>Ollama 服务地址</td></tr>
+            <tr><td><code>OLLAMA_MODEL</code></td><td><code>qwen2.5:7b</code></td><td>使用的模型名称</td></tr>
+            <tr><td><code>MOTOVIS_RAG_URL</code></td><td><code>http://rag:9380</code></td><td>RAG 服务（Docker 内网）</td></tr>
+            <tr><td><code>SAFETY_QA_DIALOG_ID</code></td><td>—</td><td>商用车 QA 默认 Dialog ID</td></tr>
+          </tbody>
+        </table>
+
+        <h3>前端关键变量</h3>
+        <table>
+          <thead><tr><th>变量名</th><th>默认值</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>NEXT_PUBLIC_AGENT_API_URL</code></td><td><code>http://localhost:2024</code></td><td>LangGraph Backend</td></tr>
+            <tr><td><code>NEXT_PUBLIC_RAG_URL</code></td><td><code>http://localhost:9380</code></td><td>RAG 服务地址</td></tr>
+            <tr><td><code>DATABASE_URL</code></td><td>—</td><td>MySQL 连接串</td></tr>
+            <tr><td><code>SESSION_SECRET</code></td><td>—</td><td>Session 加密密钥（生产必填）</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="monitor">监控运维</h2>
+
+        <h3>前端监控仪表盘</h3>
+        <p>
+          管理员登录后可访问"全局监控"视图（<code>MonitoringDashboard</code>），
+          展示：
+        </p>
+        <ul>
+          <li>各 Agent 服务健康状态</li>
+          <li>API 请求量统计（网关 API 接口）</li>
+          <li>资源使用情况（<code>ResourceMonitorView</code>）：CPU/内存/GPU 占用</li>
+          <li>网关流量分析（<code>GatewayPlanModule</code>）</li>
+        </ul>
+
+        <h3>日志查看</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># Docker 服务日志
+docker compose logs -f --tail=100 backend
+docker compose logs -f --tail=100 rag
+
+# 开发模式日志
+tail -f /tmp/agent.log
+tail -f /tmp/frontend.log
+
+# Nginx 访问日志
+tail -f /var/log/nginx/agent-platform-access.log</code></pre>
+        </div>
+
+        <h3>健康检查</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># Backend Agent
+curl http://localhost:2024/health
+
+# RAG 服务
+curl http://localhost:9380/v1/system/status
+
+# MySQL
+docker exec agent-platform-mysql mysqladmin ping -uroot -pinfini_rag_flow
+
+# Redis
+docker exec agent-platform-redis redis-cli -a infini_rag_flow ping
+
+# Elasticsearch
+curl http://localhost:9200/_cluster/health</code></pre>
+        </div>
+
+        <div class="page-nav">
+          <a class="page-nav-item" href="07-algorithm.html">
+            <div class="page-nav-label">← 上一篇</div>
+            <div class="page-nav-title">算法处理系统</div>
+          </a>
+          <a class="page-nav-item next" href="09-api-reference.html">
+            <div class="page-nav-label">下一篇 →</div>
+            <div class="page-nav-title">API 参考</div>
+          </a>
+        </div>
+      </article>
+
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title">本页目录</div>
+          <ul class="toc-list" id="toc-list"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <span>© 2024-2026 Motovis Intelligence. Agent Platform v2.4.0</span>
+      <span>基于 LangGraph · RAGFlow · Next.js 构建</span>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-docker.min.js"></script>
+<script src="assets/nav.js"></script>
+</body>
+</html>

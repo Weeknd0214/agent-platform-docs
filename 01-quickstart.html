@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>快速开始 - Agent Platform 文档</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="sidebar-logo" href="index.html">
+        <div class="logo-icon">🤖</div>
+        <div>
+          <div>Agent Platform</div>
+          <div class="sidebar-subtitle">Motovis 智能体平台</div>
+        </div>
+      </a>
+      <span class="sidebar-version">v2.4.0</span>
+    </div>
+    <ul class="sidebar-nav" id="sidebar-nav"></ul>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-mobile-btn" id="sidebar-toggle">☰</button>
+      <div class="breadcrumb">
+        <a href="index.html">首页</a>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">快速开始</span>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <article class="article">
+        <h1>🚀 快速开始</h1>
+        <p class="lead">
+          按照本指南，10 分钟内在本地完整启动 Agent Platform，
+          包括前端、后端、RAG 服务及所有依赖基础设施。
+        </p>
+
+        <h2 id="prerequisites">环境要求</h2>
+        <table>
+          <thead><tr><th>依赖</th><th>版本要求</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Docker</strong></td><td>24.0+</td><td>容器化运行基础设施</td></tr>
+            <tr><td><strong>Docker Compose</strong></td><td>2.20+</td><td>多服务编排</td></tr>
+            <tr><td><strong>Node.js</strong></td><td>18.0+</td><td>前端开发服务器</td></tr>
+            <tr><td><strong>Python</strong></td><td>3.11+</td><td>后端 Agent 服务</td></tr>
+            <tr><td><strong>Ollama</strong></td><td>最新</td><td>本地 LLM 运行时</td></tr>
+          </tbody>
+        </table>
+
+        <div class="info-box tip">
+          <div class="ib-icon">✅</div>
+          <div class="ib-content">
+            <p class="ib-title">Windows 用户</p>
+            <p>推荐使用 WSL2 + Docker Desktop，确保 Docker Compose v2 可用（<code>docker compose</code> 而非 <code>docker-compose</code>）。</p>
+          </div>
+        </div>
+
+        <h2 id="clone">第一步：克隆项目</h2>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash">git clone https://github.com/motovis/agent-platform.git
+cd agent-platform</code></pre>
+        </div>
+
+        <h2 id="env">第二步：配置环境变量</h2>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 根目录环境变量（Docker Compose 使用）
+cp .env.example .env
+
+# RAG 服务环境变量
+cp rag/.env.example rag/.env
+
+# 后端环境变量
+cp backend/.env.example backend/.env
+
+# 前端环境变量
+cp frontend/agent-chat-ui/.env.example frontend/agent-chat-ui/.env</code></pre>
+        </div>
+
+        <h3>关键环境变量说明</h3>
+        <table>
+          <thead><tr><th>变量名</th><th>默认值</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>NEXT_PUBLIC_AGENT_API_URL</code></td><td><code>http://localhost:2024</code></td><td>LangGraph 后端地址</td></tr>
+            <tr><td><code>NEXT_PUBLIC_RAG_URL</code></td><td><code>http://localhost:9380</code></td><td>RAG 服务地址</td></tr>
+            <tr><td><code>OLLAMA_MODEL</code></td><td><code>qwen2.5:7b</code></td><td>Ollama 使用的模型</td></tr>
+            <tr><td><code>OLLAMA_BASE_URL</code></td><td><code>http://localhost:11434</code></td><td>Ollama 服务地址</td></tr>
+            <tr><td><code>MOTOVIS_RAG_URL</code></td><td><code>http://rag:9380</code></td><td>后端访问 RAG 的地址（Docker 内网）</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="start-infra">第三步：启动基础设施 + RAG 服务</h2>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 启动 MySQL、Redis、MinIO、Elasticsearch、RAG、Backend
+docker compose up -d --build
+
+# 查看启动状态
+docker compose ps</code></pre>
+        </div>
+
+        <p>首次启动会拉取镜像并构建，约需 5-10 分钟。成功后各服务端口如下：</p>
+        <table>
+          <thead><tr><th>服务</th><th>端口</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>MySQL</td><td><span class="port-badge">3307</span></td><td>数据库（映射到宿主机 3307）</td></tr>
+            <tr><td>Redis</td><td><span class="port-badge">6379</span></td><td>缓存</td></tr>
+            <tr><td>MinIO</td><td><span class="port-badge">9000</span></td><td>对象存储</td></tr>
+            <tr><td>Elasticsearch</td><td><span class="port-badge">9200</span></td><td>向量/全文检索</td></tr>
+            <tr><td>RAG 服务</td><td><span class="port-badge">9380</span></td><td>RAGFlow REST API</td></tr>
+            <tr><td>Backend Agent</td><td><span class="port-badge">2024</span></td><td>LangGraph Server</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="start-frontend">第四步：启动前端</h2>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash">cd frontend/agent-chat-ui
+
+# 安装依赖（首次）
+npm install
+
+# 初始化数据库（MySQL 用户表等）
+node scripts/init-users.js
+
+# 启动开发服务器
+npm run dev</code></pre>
+        </div>
+
+        <p>前端默认运行在 <span class="port-badge">3000</span> 端口，打开浏览器访问 <code>http://localhost:3000</code>。</p>
+
+        <div class="info-box info">
+          <div class="ib-icon">ℹ️</div>
+          <div class="ib-content">
+            <p class="ib-title">默认账号</p>
+            <p>运行 <code>init-users.js</code> 后，默认管理员账号为 <strong>admin / admin123</strong>，请登录后立即修改密码。</p>
+          </div>
+        </div>
+
+        <h2 id="ollama">第五步：配置 Ollama 模型</h2>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 安装 Ollama（macOS/Linux）
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 拉取推荐模型（qwen2.5:7b）
+ollama pull qwen2.5:7b
+
+# 或者使用其他支持工具调用的模型
+ollama pull qwen2.5:14b
+ollama pull llama3.1:8b
+
+# 验证模型可用
+ollama list</code></pre>
+        </div>
+
+        <h2 id="verify">第六步：验证部署</h2>
+        <ol class="step-list">
+          <li>
+            <div>
+              <strong>访问前端</strong>：打开 <code>http://localhost:3000</code>，用 admin 账号登录，
+              应看到 Agent Marketplace 页面。
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>测试后装 Agent</strong>：在 Marketplace 选择"后装算法迭代 Agent"，
+              发送"我需要训练 DMS2.0 任务"，观察 Agent 是否返回结构化回复。
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>验证 RAG</strong>：选择"商用车主动安全 Agent"，开启"知识库记忆"，
+              上传安全规范文档，提问验证检索效果。
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>检查健康状态</strong>：访问 <code>http://localhost:2024/health</code>（Backend）
+              和 <code>http://localhost:9380/v1/system/status</code>（RAG）。
+            </div>
+          </li>
+        </ol>
+
+        <div class="info-box warning">
+          <div class="ib-icon">⚠️</div>
+          <div class="ib-content">
+            <p class="ib-title">常见问题</p>
+            <p>如果 Elasticsearch 启动失败，通常是因为 <code>vm.max_map_count</code> 设置过低。
+            Linux 下执行 <code>sudo sysctl -w vm.max_map_count=262144</code>，
+            Windows WSL2 下在 <code>/etc/sysctl.conf</code> 中添加该配置。</p>
+          </div>
+        </div>
+
+        <h2 id="dev-mode">开发模式</h2>
+        <p>如果你想单独开发后端，可以跳过 Docker 构建，直接本地运行：</p>
+
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash">cd backend
+
+# 创建虚拟环境
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 启动 LangGraph 开发服务器
+langgraph dev --config langgraph.json</code></pre>
+        </div>
+
+        <div class="page-nav">
+          <a class="page-nav-item" href="index.html">
+            <div class="page-nav-label">← 上一篇</div>
+            <div class="page-nav-title">项目概述</div>
+          </a>
+          <a class="page-nav-item next" href="02-architecture.html">
+            <div class="page-nav-label">下一篇 →</div>
+            <div class="page-nav-title">系统架构</div>
+          </a>
+        </div>
+      </article>
+
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title">本页目录</div>
+          <ul class="toc-list" id="toc-list"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <span>© 2024-2026 Motovis Intelligence. Agent Platform v2.4.0</span>
+      <span>基于 LangGraph · RAGFlow · Next.js 构建</span>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="assets/nav.js"></script>
+</body>
+</html>

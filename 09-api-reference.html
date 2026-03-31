@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API 参考 - Agent Platform 文档</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="sidebar-logo" href="index.html">
+        <div class="logo-icon">🤖</div>
+        <div>
+          <div>Agent Platform</div>
+          <div class="sidebar-subtitle">Motovis 智能体平台</div>
+        </div>
+      </a>
+      <span class="sidebar-version">v2.4.0</span>
+    </div>
+    <ul class="sidebar-nav" id="sidebar-nav"></ul>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-mobile-btn" id="sidebar-toggle">☰</button>
+      <div class="breadcrumb">
+        <a href="index.html">首页</a>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">API 参考</span>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <article class="article">
+        <h1>📡 API 参考</h1>
+        <p class="lead">
+          Agent Platform 提供四套 API：LangGraph 工作流 API、前端认证 API、
+          RAG 知识库 API 和网关统计 API，全部通过 Next.js API Routes 代理访问。
+        </p>
+
+        <h2 id="langgraph">LangGraph API</h2>
+        <p>
+          LangGraph Server 兼容 OpenAI Assistants API 风格，
+          完整文档见 <a href="https://langchain-ai.github.io/langgraph/cloud/reference/api/api_ref/" target="_blank">LangGraph Cloud API Reference</a>。
+        </p>
+
+        <h3>Thread（对话线程）</h3>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /api/langgraph/threads
+        </div>
+        <p>创建新的对话线程。</p>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-get">GET</span>
+          /api/langgraph/threads/{thread_id}
+        </div>
+        <p>获取线程信息与最新状态（消息历史）。</p>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /api/langgraph/threads/{thread_id}/runs/stream
+        </div>
+        <p>向 Agent 发送消息并以 SSE 流式方式接收回复。</p>
+
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">请求体</span>
+          <pre><code class="language-json">{
+  "assistant_id": "agent",
+  "input": {
+    "messages": [
+      { "role": "human", "content": "帮我训练 DMS2.0 任务" }
+    ]
+  },
+  "stream_mode": ["values", "messages"],
+  "config": {
+    "configurable": {
+      "thread_id": "thread-uuid-xxx",
+      "context": {
+        "knowledge_memory": false
+      }
+    }
+  }
+}</code></pre>
+        </div>
+
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">SSE 响应事件</span>
+          <pre><code class="language-json">// 消息流事件
+event: messages/partial
+data: {"content": "正在分析", "type": "AIMessageChunk"}
+
+// 完整状态更新
+event: values
+data: {"messages": [...], "task_name": "DMS2.0-人眼-test"}
+
+// 人在回路中断
+event: interrupt
+data: [{"action_request": {"action": "confirm_download"}, "description": "确认下载数据？"}]</code></pre>
+        </div>
+
+        <h3>人在回路恢复</h3>
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /api/langgraph/threads/{thread_id}/runs/stream
+        </div>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">恢复执行</span>
+          <pre><code class="language-json">{
+  "assistant_id": "agent",
+  "command": {
+    "resume": { "action": "confirm", "args": {} }
+  }
+}</code></pre>
+        </div>
+
+        <h3>Assistants（Graph 注册表）</h3>
+        <div class="api-endpoint">
+          <span class="method-badge method-get">GET</span>
+          /api/langgraph/assistants
+        </div>
+        <p>获取所有注册的 Graph（即 <code>langgraph.json</code> 中配置的 graphs）。</p>
+
+        <h2 id="auth">认证 API</h2>
+
+        <h3>登录</h3>
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /api/auth/login
+        </div>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">请求/响应</span>
+          <pre><code class="language-json">// 请求
+{ "username": "admin", "password": "xxx", "rememberMe": true }
+
+// 响应（成功）
+{
+  "success": true,
+  "user": {
+    "username": "admin",
+    "userRole": 1,
+    "isAdmin": true
+  },
+  "userConfig": {
+    "langgraphApiUrl": "http://localhost:2024",
+    "assistantId": "agent"
+  }
+}
+
+// 响应（失败）
+{ "success": false, "message": "用户名或密码错误" }</code></pre>
+        </div>
+
+        <h3>获取 Session</h3>
+        <div class="api-endpoint">
+          <span class="method-badge method-get">GET</span>
+          /api/auth/session
+        </div>
+        <p>验证当前 cookie 是否有效，返回用户信息。</p>
+
+        <h3>登出</h3>
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /api/auth/logout
+        </div>
+        <p>清除 Session cookie，返回 <code>{ success: true }</code>。</p>
+
+        <h2 id="rag">RAG API</h2>
+        <p>
+          RAG 服务基础路径：<code>http://localhost:9380/v1</code>，
+          通过前端代理路径 <code>/api/rag</code> 访问。
+          所有接口需要携带 Authorization Bearer Token。
+        </p>
+
+        <h3>知识库管理</h3>
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /v1/kb/create
+        </div>
+        <p>创建知识库（Knowledge Base）。</p>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-get">GET</span>
+          /v1/kb/list
+        </div>
+        <p>获取知识库列表。</p>
+
+        <h3>文档管理</h3>
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /v1/document/upload
+        </div>
+        <p>上传文档到指定知识库（multipart/form-data）。</p>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /v1/document/run
+        </div>
+        <p>触发文档解析（异步）。</p>
+
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">json</span>
+          <pre><code class="language-json">// POST /v1/document/run
+{ "doc_ids": ["doc-id-1", "doc-id-2"] }</code></pre>
+        </div>
+
+        <h3>对话应用</h3>
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /v1/dialog/create
+        </div>
+        <p>创建对话应用（Dialog），关联知识库和 LLM 配置。</p>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /v1/api/completion
+        </div>
+        <p>对话问答接口（商用车 QA Agent 调用此接口）。</p>
+
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">请求/响应</span>
+          <pre><code class="language-json">// 请求
+{
+  "dialog_id": "xxx",
+  "messages": [
+    { "role": "user", "content": "DMS2.0 的安全标准是什么？" }
+  ],
+  "stream": false
+}
+
+// 响应
+{
+  "data": {
+    "answer": "根据文档，DMS2.0 的安全标准...",
+    "reference": {
+      "chunks": [
+        { "content": "相关段落...", "doc_name": "安全规范.pdf", "positions": [] }
+      ]
+    }
+  }
+}</code></pre>
+        </div>
+
+        <h3>记忆管理 API</h3>
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /v1/memory/create
+        </div>
+        <div class="api-endpoint">
+          <span class="method-badge method-get">GET</span>
+          /v1/memory/list
+        </div>
+        <div class="api-endpoint">
+          <span class="method-badge method-delete">DELETE</span>
+          /v1/memory/{memory_id}
+        </div>
+
+        <h2 id="gateway">网关 API</h2>
+        <p>
+          前端"全局监控"模块通过网关 API 获取流量统计和资源使用数据。
+        </p>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-get">GET</span>
+          /api/gateway-stats
+        </div>
+        <p>获取 API 网关流量统计（请求量、响应时间、错误率）。</p>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-get">GET</span>
+          /api/resource-monitor
+        </div>
+        <p>获取服务器资源使用情况（CPU、内存、GPU 利用率）。</p>
+
+        <h2 id="admin-api">管理 API</h2>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-get">GET</span>
+          /api/admin/users
+        </div>
+        <p>获取所有用户列表（需管理员权限）。</p>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-post">POST</span>
+          /api/admin/users
+        </div>
+        <p>创建新用户。</p>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-put">PUT</span>
+          /api/admin/users/{id}
+        </div>
+        <p>更新用户信息（角色、密码、启用状态）。</p>
+
+        <div class="api-endpoint">
+          <span class="method-badge method-delete">DELETE</span>
+          /api/admin/users/{id}
+        </div>
+        <p>删除用户（级联删除配置）。</p>
+
+        <div class="page-nav">
+          <a class="page-nav-item" href="08-deployment.html">
+            <div class="page-nav-label">← 上一篇</div>
+            <div class="page-nav-title">部署与运维</div>
+          </a>
+          <a class="page-nav-item next" href="10-dev-guide.html">
+            <div class="page-nav-label">下一篇 →</div>
+            <div class="page-nav-title">开发指南</div>
+          </a>
+        </div>
+      </article>
+
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title">本页目录</div>
+          <ul class="toc-list" id="toc-list"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <span>© 2024-2026 Motovis Intelligence. Agent Platform v2.4.0</span>
+      <span>基于 LangGraph · RAGFlow · Next.js 构建</span>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+<script src="assets/nav.js"></script>
+</body>
+</html>

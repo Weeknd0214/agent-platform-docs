@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>故障排除 - Agent Platform 文档</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="sidebar-logo" href="index.html">
+        <div class="logo-icon">🤖</div>
+        <div>
+          <div>Agent Platform</div>
+          <div class="sidebar-subtitle">Motovis 智能体平台</div>
+        </div>
+      </a>
+      <span class="sidebar-version">v2.4.0</span>
+    </div>
+    <ul class="sidebar-nav" id="sidebar-nav"></ul>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-mobile-btn" id="sidebar-toggle">☰</button>
+      <div class="breadcrumb">
+        <a href="index.html">首页</a>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">故障排除</span>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <article class="article">
+        <h1>🔧 故障排除</h1>
+        <p class="lead">
+          收集了最常见的部署和使用问题及其解决方案，
+          帮助快速定位和解决问题。
+        </p>
+
+        <h2 id="env-issues">环境配置问题</h2>
+
+        <h3>问题：Elasticsearch 启动失败</h3>
+        <div class="info-box danger">
+          <div class="ib-icon">❌</div>
+          <div class="ib-content">
+            <p class="ib-title">错误信息</p>
+            <p><code>max virtual memory areas vm.max_map_count [65530] is too low</code></p>
+          </div>
+        </div>
+        <p><strong>解决方案：</strong></p>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># Linux（临时）
+sudo sysctl -w vm.max_map_count=262144
+
+# Linux（永久）
+echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# Windows WSL2（在 WSL2 中执行）
+sudo sh -c 'echo "vm.max_map_count=262144" >> /etc/sysctl.conf'
+sudo sysctl -p</code></pre>
+        </div>
+
+        <h3>问题：Ollama 连接失败</h3>
+        <div class="info-box danger">
+          <div class="ib-icon">❌</div>
+          <div class="ib-content">
+            <p class="ib-title">错误信息</p>
+            <p><code>Connection refused: http://localhost:11434</code></p>
+          </div>
+        </div>
+        <p><strong>排查步骤：</strong></p>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 1. 检查 Ollama 是否运行
+ollama list
+curl http://localhost:11434/api/tags
+
+# 2. 如果从 Docker 容器访问宿主机 Ollama
+# 修改 backend/.env，将 OLLAMA_BASE_URL 改为：
+OLLAMA_BASE_URL=http://host.docker.internal:11434  # Windows/Mac
+OLLAMA_BASE_URL=http://172.17.0.1:11434            # Linux Docker 默认网关
+
+# 3. 确认模型已下载
+ollama pull qwen2.5:7b</code></pre>
+        </div>
+
+        <h3>问题：Node.js 版本过低</h3>
+        <div class="info-box danger">
+          <div class="ib-icon">❌</div>
+          <div class="ib-content">
+            <p class="ib-title">错误信息</p>
+            <p><code>The engine "node" is incompatible with this module</code></p>
+          </div>
+        </div>
+        <p>需要 Node.js 18.0+。使用 nvm 管理版本：</p>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash">nvm install 20
+nvm use 20
+node --version  # 应显示 v20.x.x</code></pre>
+        </div>
+
+        <h2 id="db-issues">数据库连接问题</h2>
+
+        <h3>问题：MySQL 连接被拒绝</h3>
+        <div class="info-box danger">
+          <div class="ib-icon">❌</div>
+          <div class="ib-content">
+            <p class="ib-title">错误信息</p>
+            <p><code>ER_ACCESS_DENIED_ERROR: Access denied for user 'root'</code></p>
+          </div>
+        </div>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 检查 Docker 中 MySQL 是否正常运行
+docker compose ps mysql
+docker compose logs mysql
+
+# 手动连接测试（注意：Docker 映射的宿主机端口是 3307）
+mysql -h 127.0.0.1 -P 3307 -u root -pinfini_rag_flow
+
+# 如果是前端连接问题，检查 .env 中的 DATABASE_URL
+DATABASE_URL="mysql://root:infini_rag_flow@127.0.0.1:3307/agent_platform"</code></pre>
+        </div>
+
+        <h3>问题：用户表不存在</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash">cd frontend/agent-chat-ui
+# 重新运行初始化脚本
+node scripts/init-users.js
+
+# 或手动执行 SQL
+mysql -h 127.0.0.1 -P 3307 -u root -pinfini_rag_flow < scripts/init-db.sql</code></pre>
+        </div>
+
+        <h2 id="network-issues">网络连接问题</h2>
+
+        <h3>问题：前端无法连接 LangGraph Backend（422 错误）</h3>
+        <div class="info-box danger">
+          <div class="ib-icon">❌</div>
+          <div class="ib-content">
+            <p class="ib-title">错误信息</p>
+            <p><code>POST /api/langgraph/threads 422 Unprocessable Entity</code></p>
+          </div>
+        </div>
+        <p><strong>常见原因：</strong></p>
+        <ul>
+          <li>请求体格式不匹配（<code>assistant_id</code> 错误）</li>
+          <li>LangGraph Server 版本不兼容</li>
+          <li><code>NEXT_PUBLIC_AGENT_API_URL</code> 环境变量未设置</li>
+        </ul>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 验证 Backend 可访问
+curl http://localhost:2024/health
+
+# 验证 Assistant ID 存在
+curl http://localhost:2024/assistants | python3 -m json.tool
+
+# 检查前端环境变量
+cat frontend/agent-chat-ui/.env | grep AGENT_API_URL</code></pre>
+        </div>
+
+        <h3>问题：SSE 流式响应断开</h3>
+        <p><strong>可能原因：</strong></p>
+        <ul>
+          <li>Nginx 代理超时（<code>proxy_read_timeout</code> 设置不足）</li>
+          <li>网络中间件（负载均衡、CDN）切断长连接</li>
+        </ul>
+        <p><strong>解决：</strong>确保 Nginx 配置包含 <code>proxy_read_timeout 86400;</code>（24小时）。</p>
+
+        <h3>问题：RAG 服务返回 401</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 检查 RAG API Token 配置
+# 在 rag/.env 中确认 SECRET_KEY 已设置
+grep SECRET_KEY rag/.env
+
+# 通过前端登录 RAG（获取 Token）
+curl -X POST http://localhost:9380/v1/user/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@ragflow.io", "password": "admin123"}'</code></pre>
+        </div>
+
+        <h2 id="agent-issues">Agent 问题</h2>
+
+        <h3>问题：LLM 无法识别任务类型</h3>
+        <p>
+          后装 Agent 使用 LLM 解析用户意图，如果 LLM 能力不足（模型太小）可能无法正确识别。
+        </p>
+        <p><strong>解决方案：</strong></p>
+        <ul>
+          <li>升级为更大的模型：<code>OLLAMA_MODEL=qwen2.5:14b</code></li>
+          <li>在用户输入中明确指定任务类型，例如：<strong>"请帮我训练 DMS2.0-人眼 任务"</strong></li>
+          <li>降低 temperature：<code>OLLAMA_TEMPERATURE=0.2</code>（减少随机性）</li>
+        </ul>
+
+        <h3>问题：人在回路中断后无法恢复</h3>
+        <p>
+          前端点击确认后没有反应，流式响应未恢复。
+        </p>
+        <p><strong>排查：</strong></p>
+        <ul>
+          <li>检查 <code>thread_id</code> 是否与中断时的请求一致</li>
+          <li>确认 <code>command.resume</code> 的格式与后端 <code>interrupt()</code> 期望的格式匹配</li>
+          <li>查看 Backend 日志是否有异常</li>
+        </ul>
+
+        <h3>问题：商用车 QA 未返回知识库引用</h3>
+        <p>
+          开启"知识库记忆"后，回答来源于 Ollama 而非 RAG。
+        </p>
+        <p><strong>排查步骤：</strong></p>
+        <ol class="step-list">
+          <li><div>确认前端 <code>knowledge_memory: true</code> 已传入请求 <code>context</code></div></li>
+          <li><div>检查 <code>motovis_dialog_id</code> 是否在 <code>configurable</code> 中正确传递</div></li>
+          <li><div>验证 Dialog ID 对应的 RAG Dialog 是否存在且已关联知识库</div></li>
+          <li><div>检查 RAG 服务是否正常：<code>curl http://localhost:9380/v1/system/status</code></div></li>
+        </ol>
+
+        <h2 id="performance">性能优化问题</h2>
+
+        <h3>问题：LLM 响应速度慢</h3>
+        <ul>
+          <li><strong>GPU 加速</strong>：确保 Ollama 使用 GPU（<code>ollama ps</code> 查看是否有 GPU 字样）</li>
+          <li><strong>模型量化</strong>：使用 <code>:q4_0</code> 量化版本（速度提升但精度略降）</li>
+          <li><strong>并发限制</strong>：减少同时进行的对话数量</li>
+        </ul>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 检查 Ollama GPU 使用情况
+ollama ps
+nvidia-smi  # NVIDIA GPU
+
+# 使用量化模型
+ollama pull qwen2.5:7b-q4_0  # 4-bit 量化，更快
+OLLAMA_MODEL=qwen2.5:7b-q4_0</code></pre>
+        </div>
+
+        <h3>问题：Elasticsearch 内存不足</h3>
+        <p>
+          ES 默认 JVM 堆内存 512MB（<code>-Xms512m -Xmx512m</code>），如果服务器内存充裕可以调大：
+        </p>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">yaml</span>
+          <pre><code class="language-yaml"># docker-compose.yml 中修改
+elasticsearch:
+  environment:
+    - "ES_JAVA_OPTS=-Xms1g -Xmx1g"  # 调整为 1GB</code></pre>
+        </div>
+
+        <h2 id="debug-tools">调试工具</h2>
+
+        <h3>LangGraph Studio（本地调试）</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 启动带 Studio UI 的开发模式
+cd backend
+langgraph dev --host 0.0.0.0 --port 2024
+
+# 访问 Studio
+open http://localhost:2024/studio  # 可视化状态图和调试</code></pre>
+        </div>
+
+        <h3>检查容器状态</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 查看所有服务状态
+docker compose ps
+
+# 进入容器调试
+docker exec -it agent-platform-backend bash
+docker exec -it agent-platform-rag bash
+
+# 查看最近 100 行日志
+docker compose logs --tail=100 backend
+docker compose logs --tail=100 rag 2>&1 | grep -i error</code></pre>
+        </div>
+
+        <h3>前端调试技巧</h3>
+        <ul>
+          <li>打开浏览器 DevTools → Network 面板，过滤 <code>/api/langgraph</code> 请求，查看 SSE 事件流</li>
+          <li>Console 中查看 <code>Stream error</code> 日志</li>
+          <li>在 <code>providers/Stream.tsx</code> 的 <code>onError</code> 回调中添加详细日志</li>
+        </ul>
+
+        <div class="info-box tip">
+          <div class="ib-icon">✅</div>
+          <div class="ib-content">
+            <p class="ib-title">仍然无法解决？</p>
+            <p>查看 <code>docs/</code> 目录下的专项排查文档，如
+            <code>MYSQL_CONNECTION_TROUBLESHOOTING.md</code>、
+            <code>FIX_422_ERROR.md</code> 等，或在项目 Issues 中提交问题。</p>
+          </div>
+        </div>
+
+        <div class="page-nav">
+          <a class="page-nav-item" href="10-dev-guide.html">
+            <div class="page-nav-label">← 上一篇</div>
+            <div class="page-nav-title">开发指南</div>
+          </a>
+          <a class="page-nav-item next" href="index.html">
+            <div class="page-nav-label">回到首页</div>
+            <div class="page-nav-title">项目概述</div>
+          </a>
+        </div>
+      </article>
+
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title">本页目录</div>
+          <ul class="toc-list" id="toc-list"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <span>© 2024-2026 Motovis Intelligence. Agent Platform v2.4.0</span>
+      <span>基于 LangGraph · RAGFlow · Next.js 构建</span>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+<script src="assets/nav.js"></script>
+</body>
+</html>

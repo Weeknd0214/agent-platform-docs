@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG 功能模块 - Agent Platform 文档</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="sidebar-logo" href="index.html">
+        <div class="logo-icon">🤖</div>
+        <div>
+          <div>Agent Platform</div>
+          <div class="sidebar-subtitle">Motovis 智能体平台</div>
+        </div>
+      </a>
+      <span class="sidebar-version">v2.4.0</span>
+    </div>
+    <ul class="sidebar-nav" id="sidebar-nav"></ul>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-mobile-btn" id="sidebar-toggle">☰</button>
+      <div class="breadcrumb">
+        <a href="index.html">首页</a>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">RAG 功能模块</span>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <article class="article">
+        <h1>📚 RAG 功能模块</h1>
+        <p class="lead">
+          RAG（Retrieval-Augmented Generation）模块基于 RAGFlow 构建，
+          为商用车主动安全 Agent 提供知识库检索增强能力，
+          支持多数据源接入、文档解析、向量检索和对话问答。
+        </p>
+
+        <h2 id="overview">模块概览</h2>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">目录树</span>
+          <pre><code>rag/
+├── api/                    # REST API 服务层
+│   ├── apps/               # 各业务模块的 Blueprint 路由
+│   │   ├── conversation_app.py  # 对话管理
+│   │   ├── dialog_app.py        # Dialog（对话应用）管理
+│   │   ├── kb_app.py            # 知识库管理
+│   │   ├── document_app.py      # 文档管理（上传/解析/查询）
+│   │   ├── user_app.py          # 用户认证
+│   │   ├── llm_app.py           # LLM 模型配置
+│   │   └── sdk/                 # SDK 封装
+│   ├── db/                 # 数据库模型（SQLAlchemy）
+│   └── ragflow_server.py   # Quart 应用入口
+├── agent/                  # Agent 工作流引擎
+│   ├── canvas.py           # 画布编排引擎
+│   ├── component/          # 节点组件（LLM/消息/迭代/工具等）
+│   └── tools/              # Agent 工具集（23个）
+├── common/
+│   ├── data_source/        # 数据源连接器（28种）
+│   └── doc_store/          # 文档存储（ES + MinIO）
+├── deepdoc/                # 深度文档解析
+│   ├── parser/             # 多格式解析（PDF/Word/Excel/PPT...）
+│   └── vision/             # 视觉分析（表格/图片识别）
+└── rag/                    # 核心检索引擎
+    ├── llm/                # LLM 工厂
+    ├── nlp/                # NLP 工具（分词/embedding）
+    └── svr/                # 后台服务（任务执行器）</code></pre>
+        </div>
+
+        <h2 id="plugins">插件系统</h2>
+        <p>
+          RAG 内置画布（Canvas）编排引擎，通过可视化流程节点组合构建复杂 Agent 工作流。
+          每个节点类型对应 <code>agent/component/</code> 中的一个组件：
+        </p>
+
+        <table>
+          <thead><tr><th>组件</th><th>文件</th><th>功能</th></tr></thead>
+          <tbody>
+            <tr><td>LLM 节点</td><td><code>llm.py</code></td><td>调用大语言模型生成回复</td></tr>
+            <tr><td>消息节点</td><td><code>message.py</code></td><td>文档检索增强消息构建</td></tr>
+            <tr><td>工具节点</td><td><code>agent_with_tools.py</code></td><td>调用外部工具/API</td></tr>
+            <tr><td>分类节点</td><td><code>categorize.py</code></td><td>LLM 意图分类路由</td></tr>
+            <tr><td>循环节点</td><td><code>loop.py</code></td><td>迭代处理列表数据</td></tr>
+            <tr><td>Excel 处理</td><td><code>excel_processor.py</code></td><td>Excel 数据操作</td></tr>
+            <tr><td>数据操作</td><td><code>data_operations.py</code></td><td>数据过滤/转换/聚合</td></tr>
+            <tr><td>变量赋值</td><td><code>variable_assigner.py</code></td><td>流程变量管理</td></tr>
+            <tr><td>文档生成</td><td><code>docs_generator.py</code></td><td>生成 Word/PDF 报告</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="datasource">数据源连接器</h2>
+        <p>
+          RAG 支持 <strong>28 种</strong>数据源连接器，可将外部知识自动同步到知识库：
+        </p>
+
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-icon">💼</div>
+            <div class="card-title">企业协作工具</div>
+            <div class="card-desc">Confluence、Notion、Jira、Asana、飞书 AI 表格、钉钉 AI 表格</div>
+          </div>
+          <div class="card">
+            <div class="card-icon">📁</div>
+            <div class="card-title">文件存储</div>
+            <div class="card-desc">Google Drive、Dropbox、Box、OneDrive（SharePoint）、MinIO、WebDAV</div>
+          </div>
+          <div class="card">
+            <div class="card-icon">💻</div>
+            <div class="card-title">代码仓库</div>
+            <div class="card-desc">GitHub、GitLab、Bitbucket，支持 Issues/PR/代码文件</div>
+          </div>
+          <div class="card">
+            <div class="card-icon">💬</div>
+            <div class="card-title">通讯工具</div>
+            <div class="card-desc">Slack、Discord、Microsoft Teams、Gmail、IMAP 邮件</div>
+          </div>
+          <div class="card">
+            <div class="card-icon">🗄️</div>
+            <div class="card-title">数据库</div>
+            <div class="card-desc">MySQL、PostgreSQL、SQLite 等关系型数据库（RDBMS Connector）</div>
+          </div>
+          <div class="card">
+            <div class="card-icon">🌐</div>
+            <div class="card-title">其他</div>
+            <div class="card-desc">Zendesk、Airtable、Moodle、Seafile、HTML 网页</div>
+          </div>
+        </div>
+
+        <h2 id="docproc">文档处理系统</h2>
+
+        <h3>支持的文档格式</h3>
+        <div>
+          <span class="tag tag-blue">PDF</span>
+          <span class="tag tag-blue">Word (.docx/.doc)</span>
+          <span class="tag tag-blue">Excel (.xlsx/.xls)</span>
+          <span class="tag tag-blue">PowerPoint (.pptx)</span>
+          <span class="tag tag-green">Markdown</span>
+          <span class="tag tag-green">HTML</span>
+          <span class="tag tag-green">TXT</span>
+          <span class="tag tag-green">CSV</span>
+          <span class="tag tag-purple">图片（OCR）</span>
+        </div>
+
+        <h3>文档处理流程</h3>
+        <ol class="step-list">
+          <li><div><strong>上传</strong>：通过 API 上传文件到 MinIO 对象存储</div></li>
+          <li><div><strong>解析</strong>：DeepDoc 解析器提取文本（PDF 含版面分析、表格识别、图片 OCR）</div></li>
+          <li><div><strong>切片</strong>：按语义或固定大小切分文档片段（chunk）</div></li>
+          <li><div><strong>嵌入</strong>：LLM Embedding 模型生成向量表示</div></li>
+          <li><div><strong>索引</strong>：写入 Elasticsearch（向量索引 + 倒排索引双路）</div></li>
+        </ol>
+
+        <h3>DeepDoc 视觉分析</h3>
+        <p>
+          <code>deepdoc/vision/</code> 包含专门针对文档版面分析的模型：
+        </p>
+        <ul>
+          <li><strong>版面检测</strong>：识别页面中的标题、段落、表格、图片区域</li>
+          <li><strong>表格识别</strong>：提取表格结构，转换为结构化数据</li>
+          <li><strong>OCR</strong>：图片中的文字识别</li>
+          <li><strong>公式识别</strong>：数学公式的文本化</li>
+        </ul>
+
+        <h2 id="retrieval">检索增强系统</h2>
+
+        <h3>检索策略</h3>
+        <p>RAG 支持多种检索策略组合：</p>
+        <table>
+          <thead><tr><th>策略</th><th>说明</th><th>适用场景</th></tr></thead>
+          <tbody>
+            <tr><td><strong>向量检索</strong></td><td>Embedding 语义相似度匹配</td><td>语义查询，语义近似但字面不同</td></tr>
+            <tr><td><strong>全文检索</strong></td><td>BM25 关键词匹配</td><td>精确术语查询</td></tr>
+            <tr><td><strong>混合检索</strong></td><td>向量 + 全文 加权融合（RRF）</td><td>通用最佳实践</td></tr>
+            <tr><td><strong>知识图谱</strong></td><td>GraphRAG 实体关系检索</td><td>多跳推理场景</td></tr>
+          </tbody>
+        </table>
+
+        <h3>对话问答流程</h3>
+        <div class="flow-diagram">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#7aa2f7"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">① 用户问题</div><div class="flow-content-detail">自然语言输入</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#7aa2f7"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">② Query 理解</div><div class="flow-content-detail">意图分析 + 关键词提取 + 向量嵌入</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#7aa2f7"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">③ 混合检索（Elasticsearch）</div>
+                <div style="display:flex;gap:10px;margin-top:6px">
+                  <span style="font-size:12px;color:#6b7280;">kNN 向量检索</span>
+                  <span style="color:#2d2d44">|</span>
+                  <span style="font-size:12px;color:#6b7280;">BM25 全文检索</span>
+                </div>
+              </div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#7aa2f7"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">④ 重排序（Cross-Encoder Reranking）</div><div class="flow-content-detail">精准排序，取 Top-K 相关片段</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#7aa2f7"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">⑤ 上下文构建</div><div class="flow-content-detail">相关文档片段 + 引用来源元数据</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#7aa2f7"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">⑥ LLM 生成（附引用标注）</div><div class="flow-content-detail">Ollama qwen2.5:7b 生成含引用的回答</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#10b981"></div></div>
+              <div class="flow-content"><div class="flow-content-title">⑦ 返回答案 + 参考文献</div><div class="flow-content-detail">含引用片段和文档来源</div></div>
+            </div>
+          </div>
+        </div>
+
+        <h2 id="api">API 服务接口</h2>
+        <p>RAG 服务基于 Quart（异步 Flask）实现，遵循 RESTful 规范：</p>
+
+        <h3>主要 Blueprint 路由</h3>
+        <table>
+          <thead><tr><th>Blueprint</th><th>基础路径</th><th>功能</th></tr></thead>
+          <tbody>
+            <tr><td>kb_app</td><td><code>/v1/kb</code></td><td>知识库 CRUD、文档管理</td></tr>
+            <tr><td>dialog_app</td><td><code>/v1/dialog</code></td><td>对话应用配置（绑定知识库）</td></tr>
+            <tr><td>conversation_app</td><td><code>/v1/conversation</code></td><td>对话历史管理</td></tr>
+            <tr><td>document_app</td><td><code>/v1/document</code></td><td>文档上传/解析/分块</td></tr>
+            <tr><td>user_app</td><td><code>/v1/user</code></td><td>用户注册/登录</td></tr>
+            <tr><td>llm_app</td><td><code>/v1/llm</code></td><td>LLM 配置管理</td></tr>
+            <tr><td>system_app</td><td><code>/v1/system</code></td><td>系统状态/健康检查</td></tr>
+          </tbody>
+        </table>
+
+        <h3>与 Backend Agent 的集成</h3>
+        <p>
+          商用车主动安全 Agent 通过 <code>motovis_chat.py</code> 调用 RAG 的对话接口：
+        </p>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">python</span>
+          <pre><code class="language-python"># backend/safety_qa_agent/motovis_chat.py
+def chat_completion(messages, dialog_id, need_reference=True):
+    """
+    调用 MotovisRAG 对话接口
+    - dialog_id: 关联知识库的 Dialog ID
+    - 返回含引用来源的答案字符串
+    """
+    url = f"{MOTOVIS_RAG_URL}/v1/api/completion"
+    # POST 请求携带 dialog_id 和历史消息
+    # 返回 answer + 引用片段列表</code></pre>
+        </div>
+
+        <h2 id="memory">内存管理系统</h2>
+        <p>
+          <code>rag/memory/</code> 提供对话记忆管理功能，支持跨会话的长期记忆存储和检索：
+        </p>
+        <ul>
+          <li><strong>短期记忆</strong>：当前对话上下文窗口内的消息历史</li>
+          <li><strong>长期记忆</strong>：提取关键信息（实体、偏好）存储到向量数据库，跨会话检索</li>
+          <li><strong>记忆服务</strong>：<code>memory/services/</code> 提供记忆的增删改查 API</li>
+        </ul>
+
+        <div class="page-nav">
+          <a class="page-nav-item" href="05-user-management.html">
+            <div class="page-nav-label">← 上一篇</div>
+            <div class="page-nav-title">用户管理系统</div>
+          </a>
+          <a class="page-nav-item next" href="07-algorithm.html">
+            <div class="page-nav-label">下一篇 →</div>
+            <div class="page-nav-title">算法处理系统</div>
+          </a>
+        </div>
+      </article>
+
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title">本页目录</div>
+          <ul class="toc-list" id="toc-list"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <span>© 2024-2026 Motovis Intelligence. Agent Platform v2.4.0</span>
+      <span>基于 LangGraph · RAGFlow · Next.js 构建</span>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="assets/nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent Platform - 智能体平台文档</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="sidebar-logo" href="index.html">
+        <div class="logo-icon">🤖</div>
+        <div>
+          <div>Agent Platform</div>
+          <div class="sidebar-subtitle">Motovis 智能体平台</div>
+        </div>
+      </a>
+      <span class="sidebar-version">v2.4.0</span>
+    </div>
+    <ul class="sidebar-nav" id="sidebar-nav"></ul>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Topbar -->
+    <div class="topbar">
+      <button class="topbar-mobile-btn" id="sidebar-toggle">☰</button>
+      <div class="breadcrumb">
+        <span class="breadcrumb-current">项目概述</span>
+      </div>
+      <div class="topbar-links">
+        <a class="topbar-link" href="01-quickstart.html">快速开始 →</a>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content-wrapper">
+      <article class="article">
+
+        <!-- Hero -->
+        <div class="hero">
+          <div class="hero-inner">
+            <h1>🤖 Agent Platform</h1>
+            <p class="lead">
+              Motovis 智能体平台 —— 面向自动驾驶场景的企业级 AI Agent 开发与运行时平台，
+              集成 LangGraph 工作流引擎、RAG 知识库、多模态对话、算法模型迭代自动化于一体。
+            </p>
+            <div class="hero-badges">
+              <div class="hero-stat">
+                <div class="hero-stat-num">2</div>
+                <div class="hero-stat-label">智能体</div>
+              </div>
+              <div class="hero-stat">
+                <div class="hero-stat-num">5</div>
+                <div class="hero-stat-label">微服务</div>
+              </div>
+              <div class="hero-stat">
+                <div class="hero-stat-num">RAG</div>
+                <div class="hero-stat-label">知识增强</div>
+              </div>
+              <div class="hero-stat">
+                <div class="hero-stat-num">SSE</div>
+                <div class="hero-stat-label">流式响应</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h2 id="intro">项目介绍</h2>
+        <p>
+          Agent Platform 是 Motovis（魔视智能）为自动驾驶后装市场与商用车主动安全场景构建的
+          <strong>AI 智能体一体化平台</strong>。它将大模型能力、检索增强生成（RAG）、算法模型自动迭代
+          与企业级工作流引擎深度整合，支持从对话交互到算法训练部署的全链路 AI 业务流。
+        </p>
+
+        <div class="card-grid">
+          <a class="card" href="02-architecture.html">
+            <div class="card-icon">🏗️</div>
+            <div class="card-title">系统架构</div>
+            <div class="card-desc">5 个微服务协同运行，Docker Compose 一键启动，Nginx 反向代理统一入口</div>
+          </a>
+          <a class="card" href="03-frontend.html">
+            <div class="card-icon">🖥️</div>
+            <div class="card-title">前端应用</div>
+            <div class="card-desc">Next.js 14 + React 18 + TypeScript，实时流式对话，多模态输入支持</div>
+          </a>
+          <a class="card" href="04-backend.html">
+            <div class="card-icon">⚙️</div>
+            <div class="card-title">后端服务</div>
+            <div class="card-desc">LangGraph 状态图驱动，支持人在回路（Human-in-the-Loop），Ollama 本地 LLM</div>
+          </a>
+          <a class="card" href="06-rag.html">
+            <div class="card-icon">📚</div>
+            <div class="card-title">RAG 功能</div>
+            <div class="card-desc">基于 RAGFlow 的检索增强系统，支持多数据源接入与向量检索</div>
+          </a>
+          <a class="card" href="07-algorithm.html">
+            <div class="card-icon">🤖</div>
+            <div class="card-title">算法系统</div>
+            <div class="card-desc">FCOS 目标检测，支持 DMS/BSD/HOD 多场景，自动化训练与评估</div>
+          </a>
+          <a class="card" href="08-deployment.html">
+            <div class="card-icon">🐳</div>
+            <div class="card-title">部署运维</div>
+            <div class="card-desc">Docker Compose 容器编排，支持开发/生产双模式，监控仪表盘</div>
+          </a>
+        </div>
+
+        <h2 id="agents">核心智能体</h2>
+        <p>平台内置三个面向不同业务场景的智能体：</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>智能体名称</th>
+              <th>Graph ID</th>
+              <th>业务场景</th>
+              <th>端口</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>后装算法迭代 Agent</strong></td>
+              <td><code>agent</code></td>
+              <td>后装市场老旧场景适配、参数调优、OTA 版本管理</td>
+              <td><span class="port-badge">2024</span></td>
+            </tr>
+            <tr>
+              <td><strong>商用车主动安全 Agent</strong></td>
+              <td><code>safety_qa_agent</code></td>
+              <td>DMS/BSD/HOD 安全规范问答，支持 RAG 知识库增强</td>
+              <td><span class="port-badge">2024</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="tech-stack">技术栈概览</h2>
+
+        <h3>前端</h3>
+        <div>
+          <span class="tag tag-blue">Next.js 14</span>
+          <span class="tag tag-blue">React 18</span>
+          <span class="tag tag-blue">TypeScript</span>
+          <span class="tag tag-blue">Tailwind CSS</span>
+          <span class="tag tag-blue">LangGraph SDK</span>
+          <span class="tag tag-blue">TanStack Query</span>
+          <span class="tag tag-gray">nuqs (URL state)</span>
+          <span class="tag tag-gray">Sonner (toast)</span>
+          <span class="tag tag-gray">shadcn/ui</span>
+        </div>
+
+        <h3>后端</h3>
+        <div>
+          <span class="tag tag-green">Python 3.11+</span>
+          <span class="tag tag-green">LangGraph</span>
+          <span class="tag tag-green">LangChain</span>
+          <span class="tag tag-green">Ollama</span>
+          <span class="tag tag-green">FastAPI</span>
+          <span class="tag tag-gray">Quart (async)</span>
+          <span class="tag tag-gray">SQLAlchemy</span>
+        </div>
+
+        <h3>基础设施</h3>
+        <div>
+          <span class="tag tag-purple">Docker Compose</span>
+          <span class="tag tag-purple">MySQL 8.0</span>
+          <span class="tag tag-purple">Redis 7</span>
+          <span class="tag tag-purple">Elasticsearch 8</span>
+          <span class="tag tag-purple">MinIO</span>
+          <span class="tag tag-orange">Nginx</span>
+        </div>
+
+        <h2 id="features">核心功能特性</h2>
+
+        <h3>💬 实时流式对话</h3>
+        <p>
+          基于 LangGraph 的 SSE（Server-Sent Events）流式响应，前端通过
+          <code>@langchain/langgraph-sdk/react</code> 的 <code>useStream</code> hook 实时渲染 AI 回复，
+          支持多轮对话历史管理。
+        </p>
+
+        <h3>🧠 人在回路（Human-in-the-Loop）</h3>
+        <p>
+          算法迭代 Agent 执行关键任务步骤（如训练启动、数据下载）前会触发中断，
+          向前端发送 <code>HumanInterrupt</code> 事件，等待用户确认后继续执行，
+          保障关键操作的可控性。
+        </p>
+
+        <h3>📚 RAG 知识库增强</h3>
+        <p>
+          商用车主动安全 Agent 可切换"知识库记忆"模式，通过 MotovisRAG（基于 RAGFlow）
+          对安全规范文档进行检索增强，返回含引用来源的精准答案。
+        </p>
+
+        <h3>🤖 多模态输入</h3>
+        <p>
+          支持图片、PDF 等多模态文件上传，自动将文件转换为 Ollama 兼容格式
+          （<code>image_url: data:mime;base64,...</code>）传入模型。
+        </p>
+
+        <h3>🔒 企业级认证</h3>
+        <p>
+          Next.js API Route 处理登录/注册，Session cookie 持久化，
+          <code>AuthProvider</code> 全局认证状态管理，支持管理员/普通用户角色区分。
+        </p>
+
+        <h2 id="project-structure">项目结构</h2>
+
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">目录树</span>
+          <pre><code>agent-platform/
+├── frontend/agent-chat-ui/   # Next.js 前端
+│   ├── src/app/              # App Router 页面
+│   ├── src/components/       # React 组件
+│   ├── src/providers/        # Context Providers（Stream、Auth 等）
+│   ├── src/config/           # Agent 配置、网关路由
+│   └── src/lib/              # 工具函数、API 客户端
+├── backend/                  # Python 后端
+│   ├── houzhuang_agent/      # 后装算法迭代 Agent
+│   │   ├── task_proc_agent_v2.py  # 主图定义
+│   │   ├── tools/            # 任务处理工具
+│   │   └── fcos/             # FCOS 算法实现
+│   └── safety_qa_agent/      # 商用车主动安全 Agent
+├── rag/                      # RAG 知识库服务
+│   ├── api/                  # Quart REST API
+│   ├── agent/                # Agent 组件与工具
+│   └── common/               # 数据源连接器
+├── deploy/nginx/             # Nginx 配置
+├── scripts/                  # 启动/初始化脚本
+└── docker-compose.yml        # 一体化编排</code></pre>
+        </div>
+
+        <!-- Prev/Next nav -->
+        <div class="page-nav">
+          <div style="flex:1"></div>
+          <a class="page-nav-item next" href="01-quickstart.html">
+            <div class="page-nav-label">下一篇 →</div>
+            <div class="page-nav-title">快速开始</div>
+          </a>
+        </div>
+
+      </article>
+
+      <!-- TOC -->
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title">本页目录</div>
+          <ul class="toc-list" id="toc-list"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <span>© 2024-2026 Motovis Intelligence. Agent Platform v2.4.0</span>
+      <span>基于 LangGraph · RAGFlow · Next.js 构建</span>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="assets/nav.js"></script>
+</body>
+</html>

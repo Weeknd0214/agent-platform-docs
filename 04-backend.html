@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>后端服务 - Agent Platform 文档</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="sidebar-logo" href="index.html">
+        <div class="logo-icon">🤖</div>
+        <div>
+          <div>Agent Platform</div>
+          <div class="sidebar-subtitle">Motovis 智能体平台</div>
+        </div>
+      </a>
+      <span class="sidebar-version">v2.4.0</span>
+    </div>
+    <ul class="sidebar-nav" id="sidebar-nav"></ul>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-mobile-btn" id="sidebar-toggle">☰</button>
+      <div class="breadcrumb">
+        <a href="index.html">首页</a>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">后端服务</span>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <article class="article">
+        <h1>⚙️ 后端服务</h1>
+        <p class="lead">
+          后端基于 LangGraph Server 构建，提供两个独立的 AI Agent 工作流：
+          后装算法迭代 Agent（houzhuang_agent）和商用车主动安全 QA Agent（safety_qa_agent），
+          通过统一的 LangGraph API 对外提供服务。
+        </p>
+
+        <h2 id="langgraph">LangGraph 智能体架构</h2>
+
+        <h3>什么是 LangGraph</h3>
+        <p>
+          LangGraph 是 LangChain 出品的状态图（StateGraph）框架，将 AI Agent 的执行流程
+          建模为有向图：节点（Node）执行具体逻辑，边（Edge）定义路由条件，
+          状态（State）在节点间传递和共享。
+        </p>
+
+        <div class="info-box info">
+          <div class="ib-icon">ℹ️</div>
+          <div class="ib-content">
+            <p class="ib-title">LangGraph Server</p>
+            <p>LangGraph Server 自动处理 checkpoint（持久化）和 streaming，
+            无需手动实现 MemorySaver，通过 <code>langgraph.json</code> 声明 graph 入口。</p>
+          </div>
+        </div>
+
+        <h3>服务注册 — <code>langgraph.json</code></h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">json</span>
+          <pre><code class="language-json">{
+  "graphs": {
+    "agent": "./houzhuang_agent/task_proc_agent_v2.py:app",
+    "safety_qa_agent": "./safety_qa_agent/safety_qa_agent.py:app"
+  },
+  "python_version": "3.11",
+  "dependencies": ["."]
+}</code></pre>
+        </div>
+
+        <h2 id="houzhuang">后装算法迭代 Agent</h2>
+
+        <h3>状态定义</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">python</span>
+          <pre><code class="language-python">class State(TypedDict, total=False):
+    messages: Annotated[list[BaseMessage], add_messages]  # 对话消息（reducer）
+    user_input: str          # 原始用户输入
+    task_name: str           # 任务名称
+    task_proc_type: str      # 任务类型：train/eval/model_cvt
+    model_tag: str           # 模型标识：时间戳或 latest
+    data_need_download: bool # 是否需要下载数据
+    data_need_labeling: bool # 是否需要标注（训练任务）
+    task_proc_output: str    # 任务处理输出
+    human_interrupt: list    # 人在回路中断数据
+    user_id: str
+    thread_id: str
+    task_type: str           # DMS1.0/DMS2.0/BSD/HOD
+    task_func: str           # 人眼/人头 等功能</code></pre>
+        </div>
+
+        <h3>图结构</h3>
+        <div class="flow-diagram">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#7aa2f7"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">__start__</div><div class="flow-content-detail">图入口</div></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-step-connector"><div class="flow-dot" style="background:#7aa2f7"></div><div class="flow-line"></div></div>
+              <div class="flow-content"><div class="flow-content-title">node_task_proc_assistant</div><div class="flow-content-detail">LLM 解析用户意图，返回 <code>AssistantResponseFormat</code></div></div>
+            </div>
+          </div>
+          <div class="flow-branch">
+            <div class="flow-branch-item"><strong>→ node_end</strong>任务完成，直接结束</div>
+            <div class="flow-branch-item"><strong>→ node_user_input</strong>需要更多信息，等待前端下一轮消息</div>
+            <div class="flow-branch-item"><strong>→ node_task_proc</strong> task_proc 子图：下载 → <span style="color:#ef4444">interrupt()</span> → 确认 → 训练/预测 → 结果</div>
+          </div>
+        </div>
+
+        <h3>助手节点 — <code>node_task_proc_assistant</code></h3>
+        <p>
+          使用 <code>create_agent</code> 创建带结构化输出的 LLM Agent，
+          通过 <code>AssistantResponseFormat</code> 约束输出格式：
+        </p>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">python</span>
+          <pre><code class="language-python">@dataclass
+class AssistantResponseFormat:
+    response: str = ""          # 助手回答文本
+    task_proc_type: str = ""    # train / eval / model_cvt
+    task_name: str = ""         # 完整任务名称
+    data_need_download: bool = True
+    data_need_labeling: bool = True
+    model_tag: str = "latest"
+    next_node: str = ""         # 路由目标节点名称</code></pre>
+        </div>
+
+        <h3>支持的任务类型</h3>
+        <table>
+          <thead><tr><th>任务类型</th><th>处理类型</th><th>任务名格式示例</th></tr></thead>
+          <tbody>
+            <tr><td>DMS1.0</td><td>train / eval / model_cvt</td><td>DMS1.0-人眼-易甲文-NT98323-闭眼</td></tr>
+            <tr><td>DMS2.0</td><td>train / eval / model_cvt</td><td>DMS2.0-人头-20230818</td></tr>
+            <tr><td>BSD</td><td>train / eval</td><td>BSD-摩托车-20240101</td></tr>
+            <tr><td>HOD</td><td>train / eval</td><td>HOD-行人-20240215</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="safety-qa">商用车主动安全 Agent</h2>
+
+        <h3>图结构（简单两节点图）</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">python</span>
+          <pre><code class="language-python">graph = StateGraph(State)
+graph.add_node("qa_chat", _rag_chat_node)
+graph.add_edge("__start__", "qa_chat")
+graph.add_edge("qa_chat", "__end__")
+app = graph.compile()</code></pre>
+        </div>
+
+        <h3>双模式响应</h3>
+        <p>
+          <code>_rag_chat_node</code> 根据 <code>context.knowledge_memory</code> 字段
+          决定使用哪种响应方式：
+        </p>
+        <table>
+          <thead><tr><th>模式</th><th>条件</th><th>实现</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>直连模式</strong></td>
+              <td><code>knowledge_memory = false</code></td>
+              <td>直接调用 Ollama LLM，与后装 Agent 共用 <code>ollama_config</code></td>
+            </tr>
+            <tr>
+              <td><strong>RAG 模式</strong></td>
+              <td><code>knowledge_memory = true</code></td>
+              <td>调用 MotovisRAG <code>chat_completion</code>，返回含引用来源答案</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>多模态内容规范化</h3>
+        <p>
+          LangChain 与 Ollama 对多模态内容格式要求不同，<code>_normalize_human_for_ollama</code>
+          负责转换：
+        </p>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">python</span>
+          <pre><code class="language-python"># 将 LangChain 标准格式转为 Ollama 兼容格式
+# 输入: {"type": "image", "mimeType": "image/jpeg", "data": "&lt;base64&gt;"}
+# 输出: {"type": "image_url", "image_url": "data:image/jpeg;base64,&lt;base64&gt;"}</code></pre>
+        </div>
+
+        <h2 id="task">任务处理系统</h2>
+
+        <h3>任务识别与分类</h3>
+        <p>LLM Prompt 明确定义了任务分类规则：</p>
+        <ul>
+          <li>识别 DMS1.0/DMS2.0/BSD/HOD 任务类型</li>
+          <li>识别处理类型：训练（train）/ 预测（eval）/ 模型转换（model_cvt）</li>
+          <li>提取任务名称（格式：任务类型-功能-信息串）</li>
+          <li>判断是否需要数据下载/标注</li>
+        </ul>
+
+        <h3>数据处理管道</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">目录树</span>
+          <pre><code>backend/houzhuang_agent/tools/
+├── task_proc/          # 任务处理核心
+│   ├── task_proc.py    # task_proc 子图定义
+│   └── run_context.py  # 运行上下文
+├── data_pre_proc/      # 数据预处理
+├── http_server/        # HTTP 通信工具
+├── common_funcs/       # 公共函数
+└── lib/                # 依赖库</code></pre>
+        </div>
+
+        <h2 id="llm">LLM 集成</h2>
+
+        <h3>Ollama 配置 — <code>ollama_config.py</code></h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">python</span>
+          <pre><code class="language-python"># backend/ollama_config.py
+from langchain_ollama import ChatOllama
+
+def get_chat_ollama():
+    return ChatOllama(
+        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        model=os.getenv("OLLAMA_MODEL", "qwen2.5:7b"),
+        temperature=float(os.getenv("OLLAMA_TEMPERATURE", "0.7")),
+    )</code></pre>
+        </div>
+
+        <div class="info-box tip">
+          <div class="ib-icon">✅</div>
+          <div class="ib-content">
+            <p class="ib-title">模型选择建议</p>
+            <p>后装 Agent 需要结构化输出能力，推荐使用 <code>qwen2.5:14b</code> 或更大模型；
+            安全 QA 直连模式下 <code>qwen2.5:7b</code> 即可满足需求。</p>
+          </div>
+        </div>
+
+        <h2 id="stream">流式响应处理</h2>
+        <p>
+          LangGraph Server 默认支持 SSE 流式输出，前端通过以下方式订阅：
+        </p>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">typescript</span>
+          <pre><code class="language-typescript">// 前端请求流式对话
+POST /threads/{thread_id}/runs/stream
+Content-Type: application/json
+
+{
+  "assistant_id": "agent",
+  "input": { "messages": [{ "role": "human", "content": "..." }] },
+  "stream_mode": ["values", "messages"],
+  "config": {
+    "configurable": {
+      "thread_id": "xxx",
+      "context": { "knowledge_memory": false }
+    }
+  }
+}</code></pre>
+        </div>
+
+        <p>
+          响应为 SSE 事件流，包含 <code>data</code>、<code>metadata</code>、<code>interrupt</code>
+          等事件类型，<code>useStream</code> hook 自动处理并更新 React 状态。
+        </p>
+
+        <div class="page-nav">
+          <a class="page-nav-item" href="03-frontend.html">
+            <div class="page-nav-label">← 上一篇</div>
+            <div class="page-nav-title">前端应用</div>
+          </a>
+          <a class="page-nav-item next" href="05-user-management.html">
+            <div class="page-nav-label">下一篇 →</div>
+            <div class="page-nav-title">用户管理系统</div>
+          </a>
+        </div>
+      </article>
+
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title">本页目录</div>
+          <ul class="toc-list" id="toc-list"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <span>© 2024-2026 Motovis Intelligence. Agent Platform v2.4.0</span>
+      <span>基于 LangGraph · RAGFlow · Next.js 构建</span>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+<script src="assets/nav.js"></script>
+</body>
+</html>

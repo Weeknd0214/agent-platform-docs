@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>用户管理系统 - Agent Platform 文档</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="sidebar-logo" href="index.html">
+        <div class="logo-icon">🤖</div>
+        <div>
+          <div>Agent Platform</div>
+          <div class="sidebar-subtitle">Motovis 智能体平台</div>
+        </div>
+      </a>
+      <span class="sidebar-version">v2.4.0</span>
+    </div>
+    <ul class="sidebar-nav" id="sidebar-nav"></ul>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-mobile-btn" id="sidebar-toggle">☰</button>
+      <div class="breadcrumb">
+        <a href="index.html">首页</a>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">用户管理系统</span>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <article class="article">
+        <h1>👥 用户管理系统</h1>
+        <p class="lead">
+          Agent Platform 内置完整的用户认证与权限管理系统，基于 MySQL 存储用户数据，
+          支持管理员/普通用户角色划分，并允许每个用户绑定独立的 LangGraph 配置。
+        </p>
+
+        <h2 id="database">数据库设计</h2>
+
+        <h3>用户表 — <code>users</code></h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">sql</span>
+          <pre><code class="language-sql">CREATE TABLE `users` (
+  `id`            INT AUTO_INCREMENT PRIMARY KEY,
+  `username`      VARCHAR(50)  NOT NULL UNIQUE COMMENT '用户名',
+  `password_hash` VARCHAR(255) NOT NULL COMMENT 'bcrypt 哈希',
+  `user_role`     TINYINT(1)  NOT NULL DEFAULT 1
+                  COMMENT '1=算法/工程 2=产品/测试 3=运维',
+  `is_admin`      TINYINT(1)  DEFAULT 0 COMMENT '超级管理员',
+  `avatar_url`    VARCHAR(500) DEFAULT '',
+  `created_at`    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `last_login`    TIMESTAMP   NULL,
+  `is_active`     TINYINT(1)  DEFAULT 1,
+  INDEX `idx_username`  (`username`),
+  INDEX `idx_user_role` (`user_role`),
+  INDEX `idx_is_admin`  (`is_admin`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;</code></pre>
+        </div>
+
+        <h3>用户配置表 — <code>user_configs</code></h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">sql</span>
+          <pre><code class="language-sql">CREATE TABLE `user_configs` (
+  `id`                 INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id`            INT          NOT NULL,
+  `config_name`        VARCHAR(100) NOT NULL DEFAULT 'default',
+  `langsmith_api_key`  VARCHAR(255) DEFAULT '',
+  `langgraph_api_url`  VARCHAR(255) DEFAULT 'http://localhost:2024',
+  `assistant_id`       VARCHAR(50)  DEFAULT 'agent',
+  `is_default`         TINYINT(1)   DEFAULT 0,
+  `created_at`         TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uk_user_config` (`user_id`, `config_name`),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;</code></pre>
+        </div>
+
+        <p>
+          用户配置表支持每个用户绑定多套 LangGraph 配置（<code>config_name</code> 区分），
+          例如连接不同的 Backend 实例或不同的 Assistant ID。
+        </p>
+
+        <h2 id="roles">角色权限</h2>
+
+        <table>
+          <thead>
+            <tr><th>角色</th><th><code>user_role</code></th><th><code>is_admin</code></th><th>可访问功能</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>超级管理员</strong></td>
+              <td>任意</td>
+              <td>1</td>
+              <td>所有功能 + 全局监控 + 权限管理（增删用户）</td>
+            </tr>
+            <tr>
+              <td><strong>算法/工程</strong></td>
+              <td>1</td>
+              <td>0</td>
+              <td>Agent 对话、运行时、RAG 访问</td>
+            </tr>
+            <tr>
+              <td><strong>产品/测试</strong></td>
+              <td>2</td>
+              <td>0</td>
+              <td>Agent 对话、Marketplace 浏览</td>
+            </tr>
+            <tr>
+              <td><strong>运维</strong></td>
+              <td>3</td>
+              <td>0</td>
+              <td>Agent 对话、资源监控</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="auth-flow">认证流程</h2>
+
+        <h3>登录</h3>
+        <ol class="step-list">
+          <li><div>前端 <code>POST /api/auth/login</code>，携带 <code>username</code>, <code>password</code>, <code>rememberMe</code></div></li>
+          <li><div>API Route 查询 MySQL，<code>bcrypt.compare</code> 验证密码</div></li>
+          <li><div>验证通过，生成 Session：设置 HttpOnly cookie（<code>rememberMe=true</code> 时有效期 30 天）</div></li>
+          <li><div>返回 <code>{ success: true, user: {...}, userConfig: {...} }</code></div></li>
+          <li><div>AuthProvider 更新全局状态，路由跳转到主页</div></li>
+        </ol>
+
+        <h3>Session 验证</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">typescript</span>
+          <pre><code class="language-typescript">// 每次页面加载时自动验证
+const checkAuth = async () => {
+  const res = await fetch('/api/auth/session');
+  const data = await res.json();
+  if (data.success && data.user) {
+    setUser(data.user);
+    setUserConfig(data.userConfig);
+  }
+};</code></pre>
+        </div>
+
+        <h3>登出</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">typescript</span>
+          <pre><code class="language-typescript">const logout = async () => {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  setUser(null);
+  setUserConfig(null);
+  router.push('/login');
+};</code></pre>
+        </div>
+
+        <h2 id="admin">管理后台</h2>
+        <p>
+          超级管理员在侧边栏可访问"权限管理"入口，进入 <code>AdminView</code> 组件，
+          提供以下功能：
+        </p>
+        <ul>
+          <li><strong>用户列表</strong>：查看所有用户，支持搜索过滤</li>
+          <li><strong>新建用户</strong>：填写用户名、密码、角色，创建后自动哈希密码存入 MySQL</li>
+          <li><strong>编辑用户</strong>：修改角色、重置密码、启用/禁用账号</li>
+          <li><strong>删除用户</strong>：级联删除用户配置（<code>ON DELETE CASCADE</code>）</li>
+          <li><strong>用户配置管理</strong>：为每个用户设置独立的 LangGraph API URL</li>
+        </ul>
+
+        <h2 id="init">初始化</h2>
+
+        <h3>方式一：Node.js 脚本</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 在 frontend/agent-chat-ui 目录下
+node scripts/init-users.js
+
+# 脚本会：
+# 1. 连接 MySQL（读取 .env 中的数据库配置）
+# 2. 创建 users 和 user_configs 表
+# 3. 插入默认管理员账号</code></pre>
+        </div>
+
+        <h3>方式二：直接执行 SQL</h3>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">bash</span>
+          <pre><code class="language-bash"># 连接到 MySQL（Docker 端口 3307）
+mysql -h 127.0.0.1 -P 3307 -u root -pinfini_rag_flow
+
+# 执行初始化脚本
+source scripts/init-db.sql;</code></pre>
+        </div>
+
+        <div class="info-box warning">
+          <div class="ib-icon">⚠️</div>
+          <div class="ib-content">
+            <p class="ib-title">安全提示</p>
+            <p>生产环境部署后，请立即修改默认管理员密码（默认 <code>motovis</code>）。
+            密码通过 bcrypt 哈希存储，强度系数 10 轮，无法反推原始密码。</p>
+          </div>
+        </div>
+
+        <h2 id="password">密码策略</h2>
+        <p>
+          使用 <code>bcrypt</code>（cost factor = 10）哈希存储，
+          通过 <code>lib/auth/password-hash.ts</code> 提供统一的哈希与验证接口：
+        </p>
+        <div class="code-block-wrapper">
+          <span class="code-lang-badge">typescript</span>
+          <pre><code class="language-typescript">import bcrypt from 'bcryptjs';
+
+export const hashPassword = (password: string): string => {
+  return bcrypt.hashSync(password, 10);
+};
+
+export const verifyPassword = (password: string, hash: string): boolean => {
+  return bcrypt.compareSync(password, hash);
+};</code></pre>
+        </div>
+
+        <div class="page-nav">
+          <a class="page-nav-item" href="04-backend.html">
+            <div class="page-nav-label">← 上一篇</div>
+            <div class="page-nav-title">后端服务</div>
+          </a>
+          <a class="page-nav-item next" href="06-rag.html">
+            <div class="page-nav-label">下一篇 →</div>
+            <div class="page-nav-title">RAG 功能模块</div>
+          </a>
+        </div>
+      </article>
+
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title">本页目录</div>
+          <ul class="toc-list" id="toc-list"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <span>© 2024-2026 Motovis Intelligence. Agent Platform v2.4.0</span>
+      <span>基于 LangGraph · RAGFlow · Next.js 构建</span>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="assets/nav.js"></script>
+</body>
+</html>
