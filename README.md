@@ -4,6 +4,45 @@
 
 ---
 
+### 技术栈全景
+
+| 层次 | 技术选型 |
+|---|---|
+| **前端** | Next.js 15 + React 19 + TypeScript + Tailwind CSS + LangGraph SDK |
+| **后端** | FastAPI + LangGraph（主 Agent 框架）+ LangChain |
+| **LLM 服务** | vLLM 部署 Qwen3.5-27B（对话）+ Qwen3-VL-Embedding-8B（多模态向量）|
+| **RAG 引擎** | RAGFlow 二次开发：deepdoc 解析 + Qwen3-Embedding + Elasticsearch 混合检索 |
+| **数据库** | MySQL 8.0（用户认证/权限）+ Elasticsearch（向量+全文检索）|
+| **对象存储** | MinIO（文档/图片存储）|
+| **网关** | 参考 Higress 设计：Nginx + 自研插件链路（限流/鉴权/审计/Token统计）|
+| **容器化** | Docker + Docker Compose |
+| **算法框架** | PyTorch + FCOS（Anchor-Free 目标检测）+ RepVGGDet + TensorRT INT8 量化 |
+
+---
+
+### 核心功能模块
+
+```
+AI 智能体平台
+├── 后装智能体（算法闭环迭代）
+│   ├── 任务分类 → 飞书问题数据拉取 → 真值预刷/评估
+│   ├── 人在回路（训练前参数确认、异常数据人工介入）
+│   ├── 训练数据生成 → 算法执行（训练/验证/模型转换）
+│   └── 自动化测试 → 模型发布
+├── AI 网关
+│   ├── X-Request-Id 全链路追踪
+│   ├── 流量控制 + 权限校验 + SSE 透传
+│   └── Token 用量统计 + 全局监控
+├── 权限管理
+│   ├── Session 身份认证
+│   └── 多角色分级（算法/工程/产品/测试/运维/管理员）
+└── RAG 知识库集成
+    ├── 离线：文档上传 → deepdoc 解析 → XGBoost 阅读顺序 → Qwen3-Embedding → ES 入库
+    └── 在线：向量+BM25 混合检索 → Rerank → Prompt 注入 → Qwen3.5-27B 生成答案
+```
+
+
+
 ## 平台已实现的功能
 
 ### 后装智能体
